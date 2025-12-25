@@ -11,79 +11,74 @@ import ApiKeyInput from '@/components/ApiKeyInput';
 import MessageInput from '@/components/MessageInput';
 import SendButton from '@/components/SendButton';
 import ColumnMapper, { ColumnMapping, autoDetectColumns } from '@/components/ColumnMapper';
-
 interface Contact {
   name: string;
   phone: string;
   customMessage?: string;
 }
-
 interface RawData {
   [key: string]: any;
 }
-
 const Index = () => {
-  const { user, signOut } = useAuth();
+  const {
+    user,
+    signOut
+  } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [rawData, setRawData] = useState<RawData[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({ phone: '', name: '', message: '' });
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
+    phone: '',
+    name: '',
+    message: ''
+  });
   const [autoDetected, setAutoDetected] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [message, setMessage] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [savedApiKeyId, setSavedApiKeyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const {
+    toast
+  } = useToast();
 
   // Load saved API key from database
   useEffect(() => {
     const loadApiKey = async () => {
       if (!user) return;
-      
-      const { data, error } = await supabase
-        .from('api_keys')
-        .select('id, api_key')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
+      const {
+        data,
+        error
+      } = await supabase.from('api_keys').select('id, api_key').eq('user_id', user.id).eq('is_active', true).order('created_at', {
+        ascending: false
+      }).limit(1).maybeSingle();
       if (data && !error) {
         setApiKey(data.api_key);
         setSavedApiKeyId(data.id);
       }
     };
-    
     loadApiKey();
   }, [user]);
 
   // Save API key to database when changed
   const handleApiKeyChange = async (newKey: string) => {
     setApiKey(newKey);
-    
     if (!user || !newKey.trim()) return;
-    
     try {
       if (savedApiKeyId) {
         // Update existing key
-        await supabase
-          .from('api_keys')
-          .update({ api_key: newKey })
-          .eq('id', savedApiKeyId);
+        await supabase.from('api_keys').update({
+          api_key: newKey
+        }).eq('id', savedApiKeyId);
       } else {
         // Insert new key
-        const { data } = await supabase
-          .from('api_keys')
-          .insert({
-            user_id: user.id,
-            api_key: newKey,
-            key_name: 'Hudhud API Key',
-          })
-          .select('id')
-          .single();
-        
+        const {
+          data
+        } = await supabase.from('api_keys').insert({
+          user_id: user.id,
+          api_key: newKey,
+          key_name: 'Hudhud API Key'
+        }).select('id').single();
         if (data) {
           setSavedApiKeyId(data.id);
         }
@@ -92,31 +87,27 @@ const Index = () => {
       console.error('Error saving API key:', error);
     }
   };
-
   const processContacts = useCallback((data: RawData[], mapping: ColumnMapping) => {
     if (!mapping.phone) return [];
-    
-    return data
-      .filter((row) => row[mapping.phone])
-      .map((row) => ({
-        phone: String(row[mapping.phone] || '').trim().replace(/\s/g, ''),
-        name: mapping.name ? String(row[mapping.name] || '').trim() : '',
-        customMessage: mapping.message ? String(row[mapping.message] || '').trim() : undefined,
-      }));
+    return data.filter(row => row[mapping.phone]).map(row => ({
+      phone: String(row[mapping.phone] || '').trim().replace(/\s/g, ''),
+      name: mapping.name ? String(row[mapping.name] || '').trim() : '',
+      customMessage: mapping.message ? String(row[mapping.message] || '').trim() : undefined
+    }));
   }, []);
-
   const parseExcelFile = useCallback(async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
+      const workbook = XLSX.read(buffer, {
+        type: 'array'
+      });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(firstSheet) as RawData[];
-      
       if (jsonData.length === 0) {
         toast({
           title: "لا توجد بيانات",
           description: "الملف لا يحتوي على بيانات صالحة.",
-          variant: "destructive",
+          variant: "destructive"
         });
         return;
       }
@@ -125,110 +116,100 @@ const Index = () => {
       const extractedHeaders = Object.keys(jsonData[0] || {});
       setHeaders(extractedHeaders);
       setRawData(jsonData);
-      
+
       // Auto-detect columns
       const detectedMapping = autoDetectColumns(extractedHeaders);
       const hasDetected = Boolean(detectedMapping.phone || detectedMapping.name || detectedMapping.message);
       setColumnMapping(detectedMapping);
       setAutoDetected(hasDetected);
-      
+
       // Process contacts with detected mapping
       const parsedContacts = processContacts(jsonData, detectedMapping);
       setContacts(parsedContacts);
-
       toast({
         title: "تم تحميل الملف بنجاح",
-        description: hasDetected 
-          ? `تم التعرف على الأعمدة تلقائياً. ${parsedContacts.length} جهة اتصال`
-          : `تم العثور على ${extractedHeaders.length} أعمدة. الرجاء تحديد الأعمدة المطلوبة.`,
+        description: hasDetected ? `تم التعرف على الأعمدة تلقائياً. ${parsedContacts.length} جهة اتصال` : `تم العثور على ${extractedHeaders.length} أعمدة. الرجاء تحديد الأعمدة المطلوبة.`
       });
     } catch (error) {
       console.error('Error parsing Excel:', error);
       toast({
         title: "خطأ في قراءة الملف",
         description: "تعذر قراءة ملف Excel. تأكد من صحة الملف.",
-        variant: "destructive",
+        variant: "destructive"
       });
     }
   }, [toast, processContacts]);
-
   const handleMappingChange = useCallback((newMapping: ColumnMapping) => {
     setColumnMapping(newMapping);
     setAutoDetected(false);
     const parsedContacts = processContacts(rawData, newMapping);
     setContacts(parsedContacts);
   }, [rawData, processContacts]);
-
   const handleFileSelect = useCallback((selectedFile: File) => {
     setFile(selectedFile);
     parseExcelFile(selectedFile);
   }, [parseExcelFile]);
-
   const clearFile = useCallback(() => {
     setFile(null);
     setRawData([]);
     setHeaders([]);
-    setColumnMapping({ phone: '', name: '', message: '' });
+    setColumnMapping({
+      phone: '',
+      name: '',
+      message: ''
+    });
     setContacts([]);
   }, []);
-
   const handleSend = async () => {
     if (!apiKey.trim()) {
       toast({
         title: "مفتاح API مطلوب",
         description: "الرجاء إدخال مفتاح API الخاص بالهدهد",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
-
     if (!message.trim()) {
       toast({
         title: "نص الرسالة مطلوب",
         description: "الرجاء كتابة نص الرسالة",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
-
     if (contacts.length === 0) {
       toast({
         title: "لا توجد جهات اتصال",
         description: "الرجاء تحميل ملف Excel يحتوي على جهات الاتصال",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
-
     setIsLoading(true);
-
     try {
       // Prepare JSON payload for Hudhud API
       const payload = {
         api_key: apiKey,
-        messages: contacts.map((contact) => ({
+        messages: contacts.map(contact => ({
           to: contact.phone,
-          message: contact.customMessage || message.replace('{name}', contact.name),
-        })),
+          message: contact.customMessage || message.replace('{name}', contact.name)
+        }))
       };
-
       console.log('Sending payload:', JSON.stringify(payload, null, 2));
 
       // Call Hudhud API
       const response = await fetch('https://www.hloov.com/api/sms/send', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
-
       const result = await response.json();
-
       if (response.ok) {
         toast({
           title: "تم الإرسال بنجاح",
-          description: `تم إرسال ${contacts.length} رسالة بنجاح`,
+          description: `تم إرسال ${contacts.length} رسالة بنجاح`
         });
       } else {
         throw new Error(result.message || 'فشل في الإرسال');
@@ -238,17 +219,14 @@ const Index = () => {
       toast({
         title: "خطأ في الإرسال",
         description: error instanceof Error ? error.message : "حدث خطأ أثناء إرسال الرسائل",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);
     }
   };
-
   const canSend = contacts.length > 0 && message.trim() && apiKey.trim();
-
-  return (
-    <div className="min-h-screen bg-background">
+  return <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card shadow-sm">
         <div className="container py-4">
@@ -266,12 +244,7 @@ const Index = () => {
               <span className="text-sm text-muted-foreground hidden sm:block">
                 {user?.email}
               </span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={signOut}
-                className="gap-2"
-              >
+              <Button variant="outline" size="sm" onClick={signOut} className="gap-2">
                 <LogOut className="w-4 h-4" />
                 خروج
               </Button>
@@ -316,7 +289,7 @@ const Index = () => {
       </section>
 
       {/* Main Content */}
-      <main className="container py-8">
+      <main className="container py-8 border-dashed">
         <div className="max-w-3xl mx-auto space-y-8">
           {/* Step 1: Upload File */}
           <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
@@ -326,11 +299,7 @@ const Index = () => {
               </span>
               <h2 className="text-xl font-semibold text-foreground">رفع ملف Excel</h2>
             </div>
-            <FileUploader
-              onFileSelect={handleFileSelect}
-              selectedFile={file}
-              onClear={clearFile}
-            />
+            <FileUploader onFileSelect={handleFileSelect} selectedFile={file} onClear={clearFile} />
             <div className="mt-4 p-3 bg-secondary rounded-lg">
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-muted-foreground mt-0.5" />
@@ -342,26 +311,19 @@ const Index = () => {
           </div>
 
           {/* Column Mapping */}
-          {headers.length > 0 && (
-            <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
-              <ColumnMapper
-                headers={headers}
-                mapping={columnMapping}
-                onMappingChange={handleMappingChange}
-                autoDetected={autoDetected}
-              />
-            </div>
-          )}
+          {headers.length > 0 && <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
+              <ColumnMapper headers={headers} mapping={columnMapping} onMappingChange={handleMappingChange} autoDetected={autoDetected} />
+            </div>}
 
           {/* Data Preview */}
-          {contacts.length > 0 && (
-            <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
+          {contacts.length > 0 && <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
               <DataPreview data={contacts} message={message} />
-            </div>
-          )}
+            </div>}
 
           {/* Step 2: Message */}
-          <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in" style={{ animationDelay: '100ms' }}>
+          <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in" style={{
+          animationDelay: '100ms'
+        }}>
             <div className="flex items-center gap-3 mb-4">
               <span className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm">
                 2
@@ -375,7 +337,9 @@ const Index = () => {
           </div>
 
           {/* Step 3: API Key */}
-          <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in" style={{ animationDelay: '200ms' }}>
+          <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in" style={{
+          animationDelay: '200ms'
+        }}>
             <div className="flex items-center gap-3 mb-4">
               <span className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm">
                 3
@@ -383,22 +347,17 @@ const Index = () => {
               <h2 className="text-xl font-semibold text-foreground">مفتاح API</h2>
             </div>
             <ApiKeyInput value={apiKey} onChange={handleApiKeyChange} />
-            {savedApiKeyId && (
-              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            {savedApiKeyId && <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                 <Key className="w-3 h-3" />
                 <span>مفتاح API محفوظ في حسابك</span>
-              </div>
-            )}
+              </div>}
           </div>
 
           {/* Send Button */}
-          <div className="animate-fade-in" style={{ animationDelay: '300ms' }}>
-            <SendButton
-              onClick={handleSend}
-              disabled={!canSend}
-              isLoading={isLoading}
-              contactCount={contacts.length}
-            />
+          <div className="animate-fade-in" style={{
+          animationDelay: '300ms'
+        }}>
+            <SendButton onClick={handleSend} disabled={!canSend} isLoading={isLoading} contactCount={contacts.length} />
           </div>
         </div>
       </main>
@@ -411,8 +370,6 @@ const Index = () => {
           </p>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 };
-
 export default Index;
