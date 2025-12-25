@@ -7,49 +7,78 @@ import DataPreview from '@/components/DataPreview';
 import ApiKeyInput from '@/components/ApiKeyInput';
 import MessageInput from '@/components/MessageInput';
 import SendButton from '@/components/SendButton';
+import ColumnMapper, { ColumnMapping, autoDetectColumns } from '@/components/ColumnMapper';
 
 interface Contact {
   name: string;
   phone: string;
+  customMessage?: string;
+}
+
+interface RawData {
+  [key: string]: any;
 }
 
 const Index = () => {
   const [file, setFile] = useState<File | null>(null);
+  const [rawData, setRawData] = useState<RawData[]>([]);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({ phone: '', name: '', message: '' });
+  const [autoDetected, setAutoDetected] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [message, setMessage] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
+  const processContacts = useCallback((data: RawData[], mapping: ColumnMapping) => {
+    if (!mapping.phone) return [];
+    
+    return data
+      .filter((row) => row[mapping.phone])
+      .map((row) => ({
+        phone: String(row[mapping.phone] || '').trim().replace(/\s/g, ''),
+        name: mapping.name ? String(row[mapping.name] || '').trim() : '',
+        customMessage: mapping.message ? String(row[mapping.message] || '').trim() : undefined,
+      }));
+  }, []);
+
   const parseExcelFile = useCallback(async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as string[][];
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet) as RawData[];
       
-      // Skip header row and parse data
-      const parsedContacts: Contact[] = jsonData
-        .slice(1)
-        .filter((row) => row[0] && row[1])
-        .map((row) => ({
-          name: String(row[0]).trim(),
-          phone: String(row[1]).trim().replace(/\s/g, ''),
-        }));
-
-      if (parsedContacts.length === 0) {
+      if (jsonData.length === 0) {
         toast({
           title: "لا توجد بيانات",
-          description: "الملف لا يحتوي على بيانات صالحة. تأكد من وجود أعمدة الاسم ورقم الهاتف.",
+          description: "الملف لا يحتوي على بيانات صالحة.",
           variant: "destructive",
         });
         return;
       }
 
+      // Extract headers from first row keys
+      const extractedHeaders = Object.keys(jsonData[0] || {});
+      setHeaders(extractedHeaders);
+      setRawData(jsonData);
+      
+      // Auto-detect columns
+      const detectedMapping = autoDetectColumns(extractedHeaders);
+      const hasDetected = Boolean(detectedMapping.phone || detectedMapping.name || detectedMapping.message);
+      setColumnMapping(detectedMapping);
+      setAutoDetected(hasDetected);
+      
+      // Process contacts with detected mapping
+      const parsedContacts = processContacts(jsonData, detectedMapping);
       setContacts(parsedContacts);
+
       toast({
         title: "تم تحميل الملف بنجاح",
-        description: `تم العثور على ${parsedContacts.length} جهة اتصال`,
+        description: hasDetected 
+          ? `تم التعرف على الأعمدة تلقائياً. ${parsedContacts.length} جهة اتصال`
+          : `تم العثور على ${extractedHeaders.length} أعمدة. الرجاء تحديد الأعمدة المطلوبة.`,
       });
     } catch (error) {
       console.error('Error parsing Excel:', error);
@@ -59,7 +88,14 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast, processContacts]);
+
+  const handleMappingChange = useCallback((newMapping: ColumnMapping) => {
+    setColumnMapping(newMapping);
+    setAutoDetected(false);
+    const parsedContacts = processContacts(rawData, newMapping);
+    setContacts(parsedContacts);
+  }, [rawData, processContacts]);
 
   const handleFileSelect = useCallback((selectedFile: File) => {
     setFile(selectedFile);
@@ -68,6 +104,9 @@ const Index = () => {
 
   const clearFile = useCallback(() => {
     setFile(null);
+    setRawData([]);
+    setHeaders([]);
+    setColumnMapping({ phone: '', name: '', message: '' });
     setContacts([]);
   }, []);
 
@@ -107,7 +146,7 @@ const Index = () => {
         api_key: apiKey,
         messages: contacts.map((contact) => ({
           to: contact.phone,
-          message: message.replace('{name}', contact.name),
+          message: contact.customMessage || message.replace('{name}', contact.name),
         })),
       };
 
@@ -218,11 +257,23 @@ const Index = () => {
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-muted-foreground mt-0.5" />
                 <p className="text-sm text-muted-foreground">
-                  تأكد من أن الملف يحتوي على عمودين: الأول للاسم والثاني لرقم الهاتف
+                  سيتم التعرف تلقائياً على أعمدة الهاتف والاسم والرسالة. يمكنك تعديلها يدوياً إذا لزم الأمر.
                 </p>
               </div>
             </div>
           </div>
+
+          {/* Column Mapping */}
+          {headers.length > 0 && (
+            <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
+              <ColumnMapper
+                headers={headers}
+                mapping={columnMapping}
+                onMappingChange={handleMappingChange}
+                autoDetected={autoDetected}
+              />
+            </div>
+          )}
 
           {/* Data Preview */}
           {contacts.length > 0 && (
