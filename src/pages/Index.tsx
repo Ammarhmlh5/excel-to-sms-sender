@@ -1,7 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle } from 'lucide-react';
+import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut, Key } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 import FileUploader from '@/components/FileUploader';
 import DataPreview from '@/components/DataPreview';
 import ApiKeyInput from '@/components/ApiKeyInput';
@@ -20,6 +23,7 @@ interface RawData {
 }
 
 const Index = () => {
+  const { user, signOut } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [rawData, setRawData] = useState<RawData[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -28,8 +32,66 @@ const Index = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [message, setMessage] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [savedApiKeyId, setSavedApiKeyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  // Load saved API key from database
+  useEffect(() => {
+    const loadApiKey = async () => {
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from('api_keys')
+        .select('id, api_key')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (data && !error) {
+        setApiKey(data.api_key);
+        setSavedApiKeyId(data.id);
+      }
+    };
+    
+    loadApiKey();
+  }, [user]);
+
+  // Save API key to database when changed
+  const handleApiKeyChange = async (newKey: string) => {
+    setApiKey(newKey);
+    
+    if (!user || !newKey.trim()) return;
+    
+    try {
+      if (savedApiKeyId) {
+        // Update existing key
+        await supabase
+          .from('api_keys')
+          .update({ api_key: newKey })
+          .eq('id', savedApiKeyId);
+      } else {
+        // Insert new key
+        const { data } = await supabase
+          .from('api_keys')
+          .insert({
+            user_id: user.id,
+            api_key: newKey,
+            key_name: 'Hudhud API Key',
+          })
+          .select('id')
+          .single();
+        
+        if (data) {
+          setSavedApiKeyId(data.id);
+        }
+      }
+    } catch (error) {
+      console.error('Error saving API key:', error);
+    }
+  };
 
   const processContacts = useCallback((data: RawData[], mapping: ColumnMapping) => {
     if (!mapping.phone) return [];
@@ -190,13 +252,29 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border bg-card shadow-sm">
         <div className="container py-4">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center shadow-soft">
-              <MessageCircle className="w-6 h-6 text-primary-foreground" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center shadow-soft">
+                <MessageCircle className="w-6 h-6 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">مرسال الهدهد</h1>
+                <p className="text-sm text-muted-foreground">إرسال رسائل SMS جماعية بسهولة</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">مرسال الهدهد</h1>
-              <p className="text-sm text-muted-foreground">إرسال رسائل SMS جماعية بسهولة</p>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground hidden sm:block">
+                {user?.email}
+              </span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={signOut}
+                className="gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                خروج
+              </Button>
             </div>
           </div>
         </div>
@@ -304,7 +382,13 @@ const Index = () => {
               </span>
               <h2 className="text-xl font-semibold text-foreground">مفتاح API</h2>
             </div>
-            <ApiKeyInput value={apiKey} onChange={setApiKey} />
+            <ApiKeyInput value={apiKey} onChange={handleApiKeyChange} />
+            {savedApiKeyId && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <Key className="w-3 h-3" />
+                <span>مفتاح API محفوظ في حسابك</span>
+              </div>
+            )}
           </div>
 
           {/* Send Button */}
