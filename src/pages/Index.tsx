@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut, Key } from 'lucide-react';
+import ChangePasswordDialog from '@/components/ChangePasswordDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -244,6 +245,7 @@ const Index = () => {
               <span className="text-sm text-muted-foreground hidden sm:block">
                 {user?.email}
               </span>
+              <ChangePasswordDialog />
               <Button variant="outline" size="sm" onClick={signOut} className="gap-2">
                 <LogOut className="w-4 h-4" />
                 خروج

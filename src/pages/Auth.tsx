@@ -14,22 +14,53 @@ const passwordSchema = z.string().min(6, 'كلمة المرور يجب أن تك
 const Auth = () => {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const validateInputs = () => {
+  const validateInputs = (includePassword = true) => {
     try {
       emailSchema.parse(email);
-      passwordSchema.parse(password);
+      if (includePassword) {
+        passwordSchema.parse(password);
+      }
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       }
       return false;
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateInputs(false)) return;
+    
+    setLoading(true);
+
+    try {
+      const redirectUrl = `${window.location.origin}/reset-password`;
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success('تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني');
+      setIsForgotPassword(false);
+    } catch (error) {
+      toast.error('حدث خطأ غير متوقع');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -102,18 +133,24 @@ const Auth = () => {
         <Card className="border-primary/20 shadow-xl">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">
-              {isLogin ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
+              {isForgotPassword 
+                ? 'استعادة كلمة المرور' 
+                : isLogin 
+                  ? 'تسجيل الدخول' 
+                  : 'إنشاء حساب جديد'}
             </CardTitle>
             <CardDescription>
-              {isLogin 
-                ? 'أدخل بياناتك للوصول إلى حسابك' 
-                : 'أنشئ حساباً جديداً للبدء في إرسال الرسائل'}
+              {isForgotPassword
+                ? 'أدخل بريدك الإلكتروني لإرسال رابط استعادة كلمة المرور'
+                : isLogin 
+                  ? 'أدخل بياناتك للوصول إلى حسابك' 
+                  : 'أنشئ حساباً جديداً للبدء في إرسال الرسائل'}
             </CardDescription>
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={handleAuth} className="space-y-4">
-              {!isLogin && (
+            <form onSubmit={isForgotPassword ? handleForgotPassword : handleAuth} className="space-y-4">
+              {!isLogin && !isForgotPassword && (
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium">
                     <User className="w-4 h-4 text-primary" />
@@ -146,34 +183,48 @@ const Auth = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  <Lock className="w-4 h-4 text-primary" />
-                  كلمة المرور
-                </label>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="h-12 pl-12"
-                    dir="ltr"
-                    required
-                  />
+              {!isForgotPassword && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <Lock className="w-4 h-4 text-primary" />
+                    كلمة المرور
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="h-12 pl-12"
+                      dir="ltr"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-1 hover:bg-secondary rounded transition-colors"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-5 h-5 text-muted-foreground" />
+                      ) : (
+                        <Eye className="w-5 h-5 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isLogin && !isForgotPassword && (
+                <div className="text-left">
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 p-1 hover:bg-secondary rounded transition-colors"
+                    onClick={() => setIsForgotPassword(true)}
+                    className="text-primary hover:underline text-sm"
                   >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5 text-muted-foreground" />
-                    ) : (
-                      <Eye className="w-5 h-5 text-muted-foreground" />
-                    )}
+                    نسيت كلمة المرور؟
                   </button>
                 </div>
-              </div>
+              )}
 
               <Button
                 type="submit"
@@ -184,23 +235,37 @@ const Auth = () => {
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
-                    {isLogin ? 'دخول' : 'إنشاء حساب'}
+                    {isForgotPassword 
+                      ? 'إرسال رابط الاستعادة' 
+                      : isLogin 
+                        ? 'دخول' 
+                        : 'إنشاء حساب'}
                     <ArrowRight className="w-5 h-5" />
                   </>
                 )}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
-              <button
-                type="button"
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-primary hover:underline text-sm"
-              >
-                {isLogin 
-                  ? 'ليس لديك حساب؟ سجل الآن' 
-                  : 'لديك حساب بالفعل؟ سجل دخولك'}
-              </button>
+            <div className="mt-6 text-center space-y-2">
+              {isForgotPassword ? (
+                <button
+                  type="button"
+                  onClick={() => setIsForgotPassword(false)}
+                  className="text-primary hover:underline text-sm"
+                >
+                  العودة لتسجيل الدخول
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsLogin(!isLogin)}
+                  className="text-primary hover:underline text-sm"
+                >
+                  {isLogin 
+                    ? 'ليس لديك حساب؟ سجل الآن' 
+                    : 'لديك حساب بالفعل؟ سجل دخولك'}
+                </button>
+              )}
             </div>
           </CardContent>
         </Card>

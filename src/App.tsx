@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -64,6 +65,7 @@ const AppRoutes = () => (
         </PublicRoute>
       }
     />
+    <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
