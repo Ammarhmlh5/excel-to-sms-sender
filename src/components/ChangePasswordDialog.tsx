@@ -74,9 +74,9 @@ const ChangePasswordDialog = () => {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md" dir="rtl">
         <DialogHeader>
-          <DialogTitle>تغيير كلمة المرور</DialogTitle>
+          <DialogTitle>تغيير كلمة مرور الحساب</DialogTitle>
           <DialogDescription>
-            أدخل كلمة المرور الجديدة لحسابك
+            أدخل كلمة المرور الجديدة لتسجيل الدخول إلى حسابك في مرسال الهدهد
           </DialogDescription>
         </DialogHeader>
 
@@ -84,7 +84,7 @@ const ChangePasswordDialog = () => {
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium">
               <Lock className="w-4 h-4 text-primary" />
-              كلمة المرور الجديدة
+              كلمة مرور الحساب الجديدة
             </label>
             <div className="relative">
               <Input
@@ -113,7 +113,7 @@ const ChangePasswordDialog = () => {
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium">
               <Lock className="w-4 h-4 text-primary" />
-              تأكيد كلمة المرور
+              تأكيد كلمة مرور الحساب
             </label>
             <div className="relative">
               <Input
