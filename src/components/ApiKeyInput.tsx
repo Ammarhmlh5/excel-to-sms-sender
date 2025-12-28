@@ -14,14 +14,14 @@ const ApiKeyInput = ({ value, onChange }: ApiKeyInputProps) => {
     <div className="space-y-2">
       <label className="flex items-center gap-2 text-sm font-medium text-foreground">
         <Key className="w-4 h-4 text-primary" />
-        مفتاح API الخاص بالهدهد
+        مفتاح API لمنصة الهدهد (لإرسال الرسائل)
       </label>
       <div className="relative">
         <Input
           type={showKey ? "text" : "password"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="أدخل مفتاح API الخاص بك..."
+          placeholder="أدخل مفتاح API الخاص بمنصة الهدهد..."
           className="pl-12 h-12 text-base"
           dir="ltr"
         />
@@ -38,7 +38,7 @@ const ApiKeyInput = ({ value, onChange }: ApiKeyInputProps) => {
         </button>
       </div>
       <p className="text-xs text-muted-foreground">
-        يمكنك الحصول على مفتاح API من لوحة تحكم الهدهد
+        هذا المفتاح مختلف عن كلمة مرور حسابك - يمكنك الحصول عليه من لوحة تحكم منصة الهدهد للرسائل
       </p>
     </div>
   );
