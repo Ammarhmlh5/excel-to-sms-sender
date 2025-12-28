@@ -215,14 +215,6 @@ const Index = () => {
     setContacts([]);
   }, []);
   const handleSend = async () => {
-    if (!apiKey.trim()) {
-      toast({
-        title: "مفتاح API مطلوب",
-        description: "الرجاء إدخال مفتاح API لمنصة الهدهد",
-        variant: "destructive"
-      });
-      return;
-    }
     if (!message.trim()) {
       toast({
         title: "نص الرسالة مطلوب",
@@ -231,6 +223,7 @@ const Index = () => {
       });
       return;
     }
+
     if (contacts.length === 0) {
       toast({
         title: "لا توجد جهات اتصال",
@@ -239,15 +232,15 @@ const Index = () => {
       });
       return;
     }
+
     setIsLoading(true);
     try {
-      // Prepare messages for the Edge Function
+      // Prepare messages for the backend function
       const messages = contacts.map(contact => ({
         to: contact.phone,
         message: contact.customMessage || message.replace('{name}', contact.name)
       }));
 
-      // Call Edge Function instead of direct API call
       const { data, error } = await supabase.functions.invoke('send-sms', {
         body: { messages }
       });
@@ -283,7 +276,9 @@ const Index = () => {
       setIsLoading(false);
     }
   };
-  const canSend = contacts.length > 0 && message.trim() && apiKey.trim();
+
+  const canSend = contacts.length > 0 && message.trim().length > 0;
+
   return <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card shadow-sm">
