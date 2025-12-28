@@ -88,14 +88,67 @@ const Index = () => {
       console.error('Error saving API key:', error);
     }
   };
+  // Phone number validation
+  const validatePhoneNumber = useCallback((phone: string): { valid: boolean; cleaned: string; error?: string } => {
+    if (!phone) {
+      return { valid: false, cleaned: '', error: 'رقم الهاتف مطلوب' };
+    }
+    
+    // Remove spaces, dashes, and other formatting
+    const cleaned = phone.replace(/[\s\-()]/g, '');
+    
+    // Check for valid characters (digits, +)
+    if (!/^[\d+]+$/.test(cleaned)) {
+      return { valid: false, cleaned, error: 'رقم الهاتف يحتوي على أحرف غير صالحة' };
+    }
+    
+    // Get digits only for length check
+    const digitsOnly = cleaned.replace(/\D/g, '');
+    
+    if (digitsOnly.length < 9) {
+      return { valid: false, cleaned, error: 'رقم الهاتف قصير جداً' };
+    }
+    
+    if (digitsOnly.length > 15) {
+      return { valid: false, cleaned, error: 'رقم الهاتف طويل جداً' };
+    }
+    
+    return { valid: true, cleaned };
+  }, []);
+
   const processContacts = useCallback((data: RawData[], mapping: ColumnMapping) => {
     if (!mapping.phone) return [];
-    return data.filter(row => row[mapping.phone]).map(row => ({
-      phone: String(row[mapping.phone] || '').trim().replace(/\s/g, ''),
-      name: mapping.name ? String(row[mapping.name] || '').trim() : '',
-      customMessage: mapping.message ? String(row[mapping.message] || '').trim() : undefined
-    }));
-  }, []);
+    
+    const validContacts: Contact[] = [];
+    let invalidCount = 0;
+    
+    for (const row of data) {
+      const rawPhone = String(row[mapping.phone] || '').trim();
+      if (!rawPhone) continue;
+      
+      const validation = validatePhoneNumber(rawPhone);
+      
+      if (validation.valid) {
+        validContacts.push({
+          phone: validation.cleaned,
+          name: mapping.name ? String(row[mapping.name] || '').trim() : '',
+          customMessage: mapping.message ? String(row[mapping.message] || '').trim() : undefined
+        });
+      } else {
+        invalidCount++;
+      }
+    }
+    
+    if (invalidCount > 0 && data.length > 0) {
+      toast({
+        title: `${invalidCount} رقم غير صالح`,
+        description: 'تم تجاهل هذه الأرقام ولن يتم إرسال رسائل لها',
+        variant: 'destructive'
+      });
+    }
+    
+    return validContacts;
+  }, [validatePhoneNumber, toast]);
   const parseExcelFile = useCallback(async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
@@ -165,7 +218,7 @@ const Index = () => {
     if (!apiKey.trim()) {
       toast({
         title: "مفتاح API مطلوب",
-        description: "الرجاء إدخال مفتاح API الخاص بالهدهد",
+        description: "الرجاء إدخال مفتاح API لمنصة الهدهد",
         variant: "destructive"
       });
       return;
@@ -188,32 +241,36 @@ const Index = () => {
     }
     setIsLoading(true);
     try {
-      // Prepare JSON payload for Hudhud API
-      const payload = {
-        api_key: apiKey,
-        messages: contacts.map(contact => ({
-          to: contact.phone,
-          message: contact.customMessage || message.replace('{name}', contact.name)
-        }))
-      };
-      console.log('Sending payload:', JSON.stringify(payload, null, 2));
+      // Prepare messages for the Edge Function
+      const messages = contacts.map(contact => ({
+        to: contact.phone,
+        message: contact.customMessage || message.replace('{name}', contact.name)
+      }));
 
-      // Call Hudhud API
-      const response = await fetch('https://www.hloov.com/api/sms/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+      // Call Edge Function instead of direct API call
+      const { data, error } = await supabase.functions.invoke('send-sms', {
+        body: { messages }
       });
-      const result = await response.json();
-      if (response.ok) {
+
+      if (error) {
+        throw new Error(error.message || 'فشل في الإرسال');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      toast({
+        title: "تم الإرسال بنجاح",
+        description: data?.message || `تم إرسال ${contacts.length} رسالة بنجاح`
+      });
+
+      if (data?.skippedCount > 0) {
         toast({
-          title: "تم الإرسال بنجاح",
-          description: `تم إرسال ${contacts.length} رسالة بنجاح`
+          title: `تم تجاهل ${data.skippedCount} رقم`,
+          description: 'بعض الأرقام غير صالحة ولم يتم إرسال رسائل لها',
+          variant: 'destructive'
         });
-      } else {
-        throw new Error(result.message || 'فشل في الإرسال');
       }
     } catch (error) {
       console.error('Error sending messages:', error);
