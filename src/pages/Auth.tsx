@@ -180,6 +180,8 @@ const Auth = () => {
                   className="h-12"
                   dir="ltr"
                   required
+                  name="email"
+                  autoComplete="email"
                 />
               </div>
 
@@ -198,6 +200,8 @@ const Auth = () => {
                       className="h-12 pl-12"
                       dir="ltr"
                       required
+                      name="password"
+                      autoComplete="current-password"
                     />
                     <button
                       type="button"

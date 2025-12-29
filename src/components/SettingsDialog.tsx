@@ -125,6 +125,9 @@ const SettingsDialog = ({ apiKey, onApiKeyChange, savedApiKeyId }: SettingsDialo
                   placeholder="أدخل مفتاح API الخاص بمنصة الهدهد..."
                   className="pl-12 h-12 text-base"
                   dir="ltr"
+                  name="hudhud_api_key"
+                  autoComplete="off"
+                  data-lpignore="true"
                 />
                 <button
                   type="button"
