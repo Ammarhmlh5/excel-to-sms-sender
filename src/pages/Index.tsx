@@ -276,7 +276,7 @@ const Index = () => {
     }
   };
 
-  const canSend = contacts.length > 0 && message.trim().length > 0;
+  const canSend = contacts.length > 0;
 
   return <div className="min-h-screen bg-background">
       {/* Header */}
@@ -396,11 +396,6 @@ const Index = () => {
           {/* Send Button */}
           <div className="animate-fade-in" style={{
           animationDelay: '200ms'
-        }}>
-            <SendButton onClick={handleSend} disabled={!canSend} isLoading={isLoading} contactCount={contacts.length} />
-          </div>
-          <div className="animate-fade-in" style={{
-          animationDelay: '300ms'
         }}>
             <SendButton onClick={handleSend} disabled={!canSend} isLoading={isLoading} contactCount={contacts.length} />
           </div>
