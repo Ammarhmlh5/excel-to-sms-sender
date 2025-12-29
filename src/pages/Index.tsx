@@ -1,14 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut, Key } from 'lucide-react';
-import ChangePasswordDialog from '@/components/ChangePasswordDialog';
+import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut } from 'lucide-react';
+import SettingsDialog from '@/components/SettingsDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import FileUploader from '@/components/FileUploader';
 import DataPreview from '@/components/DataPreview';
-import ApiKeyInput from '@/components/ApiKeyInput';
 import MessageInput from '@/components/MessageInput';
 import SendButton from '@/components/SendButton';
 import ColumnMapper, { ColumnMapping, autoDetectColumns } from '@/components/ColumnMapper';
@@ -297,7 +296,11 @@ const Index = () => {
               <span className="text-sm text-muted-foreground hidden sm:block">
                 {user?.email}
               </span>
-              <ChangePasswordDialog />
+              <SettingsDialog 
+                apiKey={apiKey} 
+                onApiKeyChange={handleApiKeyChange} 
+                savedApiKeyId={savedApiKeyId} 
+              />
               <Button variant="outline" size="sm" onClick={signOut} className="gap-2">
                 <LogOut className="w-4 h-4" />
                 خروج
@@ -390,24 +393,12 @@ const Index = () => {
             </p>
           </div>
 
-          {/* Step 3: API Key */}
-          <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in" style={{
+          {/* Send Button */}
+          <div className="animate-fade-in" style={{
           animationDelay: '200ms'
         }}>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm">
-                3
-              </span>
-              <h2 className="text-xl font-semibold text-foreground">مفتاح API</h2>
-            </div>
-            <ApiKeyInput value={apiKey} onChange={handleApiKeyChange} />
-            {savedApiKeyId && <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                <Key className="w-3 h-3" />
-                <span>مفتاح API محفوظ في حسابك</span>
-              </div>}
+            <SendButton onClick={handleSend} disabled={!canSend} isLoading={isLoading} contactCount={contacts.length} />
           </div>
-
-          {/* Send Button */}
           <div className="animate-fade-in" style={{
           animationDelay: '300ms'
         }}>
