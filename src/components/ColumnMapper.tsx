@@ -68,7 +68,7 @@ const ColumnMapper = ({ headers, mapping, onMappingChange, autoDetected }: Colum
   const columns = [
     { key: 'phone' as const, label: 'رقم الهاتف', icon: Phone, required: true },
     { key: 'name' as const, label: 'اسم العميل', icon: User, required: false },
-    { key: 'message' as const, label: 'نص الرسالة', icon: MessageSquare, required: false },
+    { key: 'message' as const, label: 'نص الرسالة', icon: MessageSquare, required: true },
   ];
 
   return (
@@ -114,6 +114,11 @@ const ColumnMapper = ({ headers, mapping, onMappingChange, autoDetected }: Colum
       {!mapping.phone && (
         <p className="text-sm text-destructive flex items-center gap-1">
           ⚠️ يجب تحديد عمود رقم الهاتف
+        </p>
+      )}
+      {!mapping.message && (
+        <p className="text-sm text-destructive flex items-center gap-1">
+          ⚠️ يجب تحديد عمود نص الرسالة
         </p>
       )}
     </div>
