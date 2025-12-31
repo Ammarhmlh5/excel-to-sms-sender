@@ -137,11 +137,38 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       body: JSON.stringify(payload)
     });
 
-    const hudhudResult = await hudhudResponse.json();
+    // Check if response is JSON
+    const contentType = hudhudResponse.headers.get('content-type') || '';
+    const responseText = await hudhudResponse.text();
+    
+    console.log('Hudhud API response status:', hudhudResponse.status);
+    console.log('Hudhud API content-type:', contentType);
+    console.log('Hudhud API response (first 500 chars):', responseText.substring(0, 500));
+
+    let hudhudResult;
+    if (contentType.includes('application/json') && responseText.trim().startsWith('{')) {
+      try {
+        hudhudResult = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse JSON response:', e);
+        hudhudResult = { error: 'Invalid JSON response', raw: responseText.substring(0, 200) };
+      }
+    } else {
+      // API returned HTML or non-JSON response
+      console.error('API returned non-JSON response:', responseText.substring(0, 500));
+      return new Response(
+        JSON.stringify({ 
+          error: 'خطأ في الاتصال بخادم الرسائل - الرجاء التحقق من مفتاح API أو المحاولة لاحقاً',
+          details: `Server returned: ${hudhudResponse.status} ${hudhudResponse.statusText}`
+        }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Log to database
     const status = hudhudResponse.ok ? 'sent' : 'failed';
