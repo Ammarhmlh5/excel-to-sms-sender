@@ -9,10 +9,9 @@ interface Contact {
 
 interface DataPreviewProps {
   data: Contact[];
-  message: string;
 }
 
-const DataPreview = ({ data, message }: DataPreviewProps) => {
+const DataPreview = ({ data }: DataPreviewProps) => {
   if (data.length === 0) return null;
 
   const hasCustomMessages = data.some(contact => contact.customMessage);
@@ -87,15 +86,6 @@ const DataPreview = ({ data, message }: DataPreviewProps) => {
         )}
       </div>
 
-      {message && !hasCustomMessages && (
-        <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <MessageSquare className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-foreground">نص الرسالة:</span>
-          </div>
-          <p className="text-foreground whitespace-pre-wrap">{message}</p>
-        </div>
-      )}
 
       {hasCustomMessages && (
         <div className="p-4 bg-accent/10 border border-accent/20 rounded-lg">

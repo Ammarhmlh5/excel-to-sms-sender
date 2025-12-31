@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import FileUploader from '@/components/FileUploader';
 import DataPreview from '@/components/DataPreview';
-import MessageInput from '@/components/MessageInput';
+
 import SendButton from '@/components/SendButton';
 import ColumnMapper, { ColumnMapping, autoDetectColumns } from '@/components/ColumnMapper';
 interface Contact {
@@ -34,7 +34,7 @@ const Index = () => {
   });
   const [autoDetected, setAutoDetected] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [message, setMessage] = useState('');
+  
   const [apiKey, setApiKey] = useState('');
   const [savedApiKeyId, setSavedApiKeyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -214,15 +214,6 @@ const Index = () => {
     setContacts([]);
   }, []);
   const handleSend = async () => {
-    if (!message.trim()) {
-      toast({
-        title: "نص الرسالة مطلوب",
-        description: "الرجاء كتابة نص الرسالة",
-        variant: "destructive"
-      });
-      return;
-    }
-
     if (contacts.length === 0) {
       toast({
         title: "لا توجد جهات اتصال",
@@ -234,11 +225,11 @@ const Index = () => {
 
     setIsLoading(true);
     try {
-      // Prepare messages for the backend function
+      // Prepare messages for the backend function - use message from Excel
       const messages = contacts.map(contact => ({
         to: contact.phone,
-        message: contact.customMessage || message.replace('{name}', contact.name)
-      }));
+        message: contact.customMessage || ''
+      })).filter(msg => msg.message.trim() !== '');
 
       const { data, error } = await supabase.functions.invoke('send-sms', {
         body: { messages }
@@ -276,7 +267,9 @@ const Index = () => {
     }
   };
 
-  const canSend = contacts.length > 0;
+  // Check if contacts have messages from Excel
+  const hasMessages = contacts.some(c => c.customMessage && c.customMessage.trim() !== '');
+  const canSend = contacts.length > 0 && hasMessages;
 
   return <div className="min-h-screen bg-background">
       {/* Header */}
@@ -374,24 +367,8 @@ const Index = () => {
 
           {/* Data Preview */}
           {contacts.length > 0 && <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
-              <DataPreview data={contacts} message={message} />
+              <DataPreview data={contacts} />
             </div>}
-
-          {/* Step 2: Message */}
-          <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in" style={{
-          animationDelay: '100ms'
-        }}>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm">
-                2
-              </span>
-              <h2 className="text-xl font-semibold text-foreground">كتابة الرسالة</h2>
-            </div>
-            <MessageInput value={message} onChange={setMessage} />
-            <p className="mt-2 text-xs text-muted-foreground">
-              💡 نصيحة: استخدم {'{name}'} لتضمين اسم المستلم تلقائياً
-            </p>
-          </div>
 
           {/* Send Button */}
           <div className="animate-fade-in" style={{
