@@ -247,26 +247,31 @@ serve(async (req) => {
 
     // Record rate-limit usage (bucketed per hour)
     if (status === 'sent') {
-      await adminClient
+      const { data: existing } = await adminClient
         .from('rate_limits')
-        .upsert(
-          {
+        .select('id, messages_sent, requests_made')
+        .eq('user_id', user.id)
+        .eq('window_start', hourStart.toISOString())
+        .maybeSingle();
+
+      if (existing) {
+        await adminClient
+          .from('rate_limits')
+          .update({
+            messages_sent: (existing.messages_sent || 0) + validMessages.length,
+            requests_made: (existing.requests_made || 0) + 1,
+          })
+          .eq('id', existing.id);
+      } else {
+        await adminClient
+          .from('rate_limits')
+          .insert({
             user_id: user.id,
             window_start: hourStart.toISOString(),
-            messages_sent: hourlySent + validMessages.length - (hourlySent || 0), // increment via re-upsert below
+            messages_sent: validMessages.length,
             requests_made: 1,
-          },
-          { onConflict: 'user_id,window_start' }
-        );
-      // Increment atomically using RPC-like update
-      await adminClient.rpc('noop').catch(() => {});
-      await adminClient
-        .from('rate_limits')
-        .update({
-          messages_sent: hourlySent + validMessages.length,
-        })
-        .eq('user_id', user.id)
-        .eq('window_start', hourStart.toISOString());
+          });
+      }
     }
 
     if (!hudhudResponse.ok) {
