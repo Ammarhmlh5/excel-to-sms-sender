@@ -149,7 +149,12 @@ const Auth = () => {
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={isForgotPassword ? handleForgotPassword : handleAuth} className="space-y-4">
+            <form
+              key={isForgotPassword ? 'forgot' : isLogin ? 'login' : 'register'}
+              onSubmit={isForgotPassword ? handleForgotPassword : handleAuth}
+              className="space-y-4"
+              autoComplete="off"
+            >
               {!isLogin && !isForgotPassword && (
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium">
