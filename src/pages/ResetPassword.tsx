@@ -20,18 +20,23 @@ const ResetPassword = () => {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    // Check if user came from a password reset link
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const type = hashParams.get('type');
+    const handleRecoverySession = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
 
-    if (accessToken && type === 'recovery') {
-      // Set the session with the recovery token
-      supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: hashParams.get('refresh_token') || '',
-      });
-    }
+      if (accessToken && type === 'recovery') {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: hashParams.get('refresh_token') || '',
+        });
+        if (error) {
+          console.error('[ResetPassword] setSession error:', error);
+          toast.error('فشل في استعادة الجلسة. الرابط قد يكون منتهي الصلاحية.');
+        }
+      }
+    };
+    handleRecoverySession();
   }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {

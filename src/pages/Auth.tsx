@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +14,7 @@ const passwordSchema = z.string().min(6, 'كلمة المرور يجب أن تك
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
@@ -20,6 +22,12 @@ const Auth = () => {
   const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, authLoading, navigate]);
 
   const validateInputs = (includePassword = true) => {
     try {
@@ -73,26 +81,29 @@ const Auth = () => {
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         
         if (error) {
-          if (error.message === 'Invalid login credentials') {
-            toast.error('بيانات الدخول غير صحيحة');
-          } else {
-            toast.error(error.message);
-          }
+          // Log full error details to console for debugging
+          console.error('[Auth] signInWithPassword failed:', {
+            message: error.message,
+            status: error.status,
+            code: (error as any).code,
+            details: error,
+          });
+          toast.error(`خطأ تسجيل الدخول: ${error.message} (${error.status ?? '?'})`);
           return;
         }
         
+        console.log('[Auth] signInWithPassword success, user:', data.user?.id);
         toast.success('تم تسجيل الدخول بنجاح');
-        navigate('/');
       } else {
         const redirectUrl = `${window.location.origin}/`;
         
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -104,19 +115,28 @@ const Auth = () => {
         });
         
         if (error) {
-          if (error.message.includes('already registered')) {
-            toast.error('هذا البريد الإلكتروني مسجل مسبقاً');
-          } else {
-            toast.error(error.message);
-          }
+          console.error('[Auth] signUp failed:', {
+            message: error.message,
+            status: error.status,
+            code: (error as any).code,
+            details: error,
+          });
+          toast.error(`خطأ إنشاء الحساب: ${error.message} (${error.status ?? '?'})`);
+          return;
+        }
+
+        console.log('[Auth] signUp result:', data);
+        // Supabase may return a user with no session if email confirmation is required
+        if (data.user && !data.session) {
+          toast.info('تم إنشاء الحساب - يرجى تأكيد بريدك الإلكتروني أو تعطيل التأكيد من Supabase Dashboard');
           return;
         }
         
         toast.success('تم إنشاء الحساب بنجاح');
-        navigate('/');
       }
     } catch (error) {
-      toast.error('حدث خطأ غير متوقع');
+      console.error('[Auth] Unexpected error:', error);
+      toast.error(`حدث خطأ غير متوقع: ${String(error)}`);
     } finally {
       setLoading(false);
     }
