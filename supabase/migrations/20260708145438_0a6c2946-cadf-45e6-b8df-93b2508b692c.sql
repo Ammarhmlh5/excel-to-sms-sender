@@ -41,7 +41,13 @@ ON public.user_roles FOR SELECT
 TO authenticated
 USING (public.has_role(auth.uid(), 'admin'));
 
--- Grant admin to the chosen user
-INSERT INTO public.user_roles (user_id, role)
-VALUES ('949abb5d-5bd2-4902-bb16-327240e0d36a', 'admin')
-ON CONFLICT (user_id, role) DO NOTHING;
+-- Grant admin to the chosen user (only if user exists in auth.users)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM auth.users WHERE id = '949abb5d-5bd2-4902-bb16-327240e0d36a') THEN
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES ('949abb5d-5bd2-4902-bb16-327240e0d36a', 'admin')
+    ON CONFLICT (user_id, role) DO NOTHING;
+  END IF;
+END;
+$$;
