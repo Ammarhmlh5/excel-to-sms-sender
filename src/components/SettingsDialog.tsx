@@ -12,9 +12,10 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Lock, Eye, EyeOff, Settings, Key, CheckCircle } from 'lucide-react';
+import { Lock, Eye, EyeOff, Settings, Key, CheckCircle, Link } from 'lucide-react';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
+import LinkedAccounts from '@/components/LinkedAccounts';
 
 const passwordSchema = z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
 
@@ -105,10 +106,14 @@ const SettingsDialog = ({ apiKey, onApiKeyChange, savedApiKeyId }: SettingsDialo
         </DialogHeader>
 
         <Tabs defaultValue="api-key" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="api-key" className="gap-2">
               <Key className="w-4 h-4" />
               مفتاح API
+            </TabsTrigger>
+            <TabsTrigger value="linked-accounts" className="gap-2">
+              <Link className="w-4 h-4" />
+              الحسابات المرتبطة
             </TabsTrigger>
             <TabsTrigger value="password" className="gap-2">
               <Lock className="w-4 h-4" />
@@ -237,6 +242,10 @@ const SettingsDialog = ({ apiKey, onApiKeyChange, savedApiKeyId }: SettingsDialo
                 )}
               </Button>
             </form>
+          </TabsContent>
+
+          <TabsContent value="linked-accounts" className="mt-4">
+            <LinkedAccounts />
           </TabsContent>
         </Tabs>
       </DialogContent>

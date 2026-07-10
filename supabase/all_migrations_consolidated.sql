@@ -1,6 +1,7 @@
 -- ============================================================
--- All migrations consolidated — paste this in Supabase SQL Editor
+-- All migrations consolidated — paste in Supabase SQL Editor
 -- https://supabase.com/dashboard/project/jqilueudbhgcgskvkvhe/sql/new
+-- Includes all security fixes + audit fixes (2026-07-12)
 -- ============================================================
 
 -- ============================================================
@@ -59,7 +60,7 @@ BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public;
 
 DROP TRIGGER IF EXISTS update_campaigns_updated_at ON campaigns;
 CREATE TRIGGER update_campaigns_updated_at
@@ -119,7 +120,61 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================
--- 5. pg_cron (requires pg_cron extension enabled in Dashboard)
+-- 5. Atomic rate limit (fix: check hourly BEFORE upsert)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.check_rate_limit_and_increment(
+  p_user_id UUID,
+  p_window_start TIMESTAMPTZ,
+  p_message_count INT,
+  p_max_hourly INT,
+  p_max_daily INT
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_hourly_sent INT;
+  v_daily_sent INT;
+  v_day_start TIMESTAMPTZ;
+BEGIN
+  v_day_start := date_trunc('day', p_window_start);
+
+  PERFORM 1 FROM rate_limits
+  WHERE user_id = p_user_id AND window_start >= v_day_start
+  FOR UPDATE;
+
+  SELECT COALESCE(SUM(messages_sent), 0) INTO v_daily_sent
+  FROM rate_limits
+  WHERE user_id = p_user_id AND window_start >= v_day_start;
+
+  IF v_daily_sent + p_message_count > p_max_daily THEN
+    RETURN jsonb_build_object('allowed', false, 'reason', 'daily_limit');
+  END IF;
+
+  SELECT COALESCE(messages_sent, 0) INTO v_hourly_sent
+  FROM rate_limits
+  WHERE user_id = p_user_id AND window_start = p_window_start;
+
+  IF v_hourly_sent + p_message_count > p_max_hourly THEN
+    RETURN jsonb_build_object('allowed', false, 'reason', 'hourly_limit');
+  END IF;
+
+  INSERT INTO rate_limits (user_id, window_start, messages_sent, requests_made)
+  VALUES (p_user_id, p_window_start, p_message_count, 1)
+  ON CONFLICT (user_id, window_start)
+  DO UPDATE SET
+    messages_sent = rate_limits.messages_sent + p_message_count,
+    requests_made = rate_limits.requests_made + 1
+  RETURNING messages_sent INTO v_hourly_sent;
+
+  RETURN jsonb_build_object('allowed', true, 'hourly_sent', v_hourly_sent, 'daily_sent', v_daily_sent + p_message_count);
+END;
+$$;
+
+GRANT ALL ON FUNCTION public.check_rate_limit_and_increment TO service_role;
+
+-- ============================================================
+-- 6. pg_cron (requires pg_cron extension enabled in Dashboard)
 -- ============================================================
 
 DO $$
@@ -141,7 +196,7 @@ BEGIN
 END $$;
 
 -- ============================================================
--- 6. Final DB Fixes
+-- 7. Final DB Fixes
 -- ============================================================
 
 ALTER TABLE public.rate_limits
@@ -152,3 +207,41 @@ CREATE INDEX IF NOT EXISTS idx_sms_logs_user_id ON public.sms_logs(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_campaign_messages_campaign_status
   ON public.campaign_messages(campaign_id, status);
+
+-- ============================================================
+-- 8. Audit Fixes (after comprehensive review)
+-- ============================================================
+
+ALTER TABLE public.rate_limits
+  ADD CONSTRAINT rate_limits_messages_sent_nonneg
+  CHECK (messages_sent >= 0);
+
+ALTER TABLE public.rate_limits
+  ADD CONSTRAINT rate_limits_requests_made_nonneg
+  CHECK (requests_made >= 0);
+
+ALTER TABLE public.sms_logs
+  ADD CONSTRAINT sms_logs_status_check
+  CHECK (status IN ('pending', 'sent', 'failed'));
+
+CREATE INDEX IF NOT EXISTS idx_campaigns_id_user
+  ON public.campaigns(id, user_id);
+
+DROP INDEX IF EXISTS public.idx_campaign_messages_campaign;
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (user_id, full_name, company_name)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data ->> 'full_name', ''),
+    COALESCE(NEW.raw_user_meta_data ->> 'company_name', '')
+  )
+  ON CONFLICT (user_id) DO NOTHING;
+  RETURN NEW;
+EXCEPTION WHEN unique_violation THEN
+  RAISE WARNING 'Profile already exists for user %', NEW.id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

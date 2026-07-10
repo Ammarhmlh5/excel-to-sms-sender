@@ -145,6 +145,21 @@ serve(async (req) => {
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+
+      const platformName = platform === 'android' ? 'hudhud_android' : platform === 'ios' ? 'hudhud_ios' : 'mobile';
+      const { error: linkError } = await supabase.from('user_links').upsert({
+        local_user_id: user.id,
+        external_platform: platformName,
+        external_user_id: device_id.trim(),
+        external_email: null,
+        linked_via: 'device_registration',
+        is_verified: true,
+      }, {
+        onConflict: 'local_user_id, external_platform',
+      });
+      if (linkError) {
+        console.error('Failed to create user_link:', linkError.message);
+      }
     }
 
     return new Response(
