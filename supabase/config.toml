@@ -1,4 +1,13 @@
 project_id = "jqilueudbhgcgskvkvhe"
 
 [functions.send-sms]
+verify_jwt = true
+
+[functions.register-device]
+verify_jwt = true
+
+[functions.verify-jwks]
+verify_jwt = false
+
+[functions.cleanup-old-data]
 verify_jwt = false

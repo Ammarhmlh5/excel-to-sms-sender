@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 interface SMSMessage {
   to: string;
@@ -13,22 +9,24 @@ interface SMSMessage {
 
 interface RequestBody {
   messages: SMSMessage[];
+  campaign_id?: string;
+  device_id?: string;
+  campaign_name?: string;
 }
 
-// Rate limiting configuration
 const RATE_LIMITS = {
   MAX_MESSAGES_PER_REQUEST: 1000,
   MAX_MESSAGES_PER_HOUR: 5000,
   MAX_MESSAGES_PER_DAY: 10000,
-  MAX_MESSAGE_LENGTH: 1530, // ~10 concatenated SMS
+  MAX_MESSAGE_LENGTH: 1530,
 };
 
 function validateMessage(message: string): { valid: boolean; error?: string; sanitized?: string } {
   if (typeof message !== 'string') {
     return { valid: false, error: 'Message must be a string' };
   }
-  // Remove null bytes and control chars (keep newline/tab)
-  const cleaned = message.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+  // eslint-disable-next-line no-control-regex
+  const cleaned = message.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, '');
   const trimmed = cleaned.trim();
   if (trimmed.length === 0) {
     return { valid: false, error: 'Message cannot be empty' };
@@ -40,7 +38,7 @@ function validateMessage(message: string): { valid: boolean; error?: string; san
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  const corsHeaders = getCorsHeaders(req.headers.get('Origin') || undefined);
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -101,7 +99,15 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const body: RequestBody = await req.json();
+    let body: RequestBody;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'طلب غير صالح - البيانات ليست JSON صحيح' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     const { messages } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -120,23 +126,28 @@ serve(async (req) => {
     }
 
     // Validate phone numbers
-    const phoneRegex = /^[\d+\-\s()]+$/;
     const validMessages: SMSMessage[] = [];
     const invalidNumbers: string[] = [];
 
     for (const msg of messages) {
       const phone = msg.to?.trim();
-      if (!phone || !phoneRegex.test(phone)) {
-        invalidNumbers.push(phone || 'empty');
+      if (!phone) {
+        invalidNumbers.push('empty');
         continue;
       }
       
       // Clean phone number - remove spaces and special chars except +
       const cleanPhone = phone.replace(/[\s\-()]/g, '');
       
-      // Basic validation - at least 9 digits
+      // Must start with + or digit, only contain digits after cleaning
       const digitsOnly = cleanPhone.replace(/\D/g, '');
-      if (digitsOnly.length < 9) {
+      if (digitsOnly.length === 0) {
+        invalidNumbers.push(phone);
+        continue;
+      }
+      
+      // Basic validation - at least 9 digits, at most 15 digits
+      if (digitsOnly.length < 9 || digitsOnly.length > 15) {
         invalidNumbers.push(phone);
         continue;
       }
@@ -164,35 +175,89 @@ serve(async (req) => {
       );
     }
 
-    // Rate limit checks (hourly + daily) using rate_limits table
+    // Atomic rate limit check (uses PostgreSQL function to prevent race conditions)
     const now = new Date();
     const hourStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), 0, 0));
-    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
 
-    const { data: hourRows } = await adminClient
-      .from('rate_limits')
-      .select('messages_sent')
-      .eq('user_id', user.id)
-      .gte('window_start', hourStart.toISOString());
-    const hourlySent = (hourRows || []).reduce((s: number, r: any) => s + (r.messages_sent || 0), 0);
-    if (hourlySent + validMessages.length > RATE_LIMITS.MAX_MESSAGES_PER_HOUR) {
+    const { data: rateResult, error: rateError } = await adminClient.rpc('check_rate_limit_and_increment', {
+      p_user_id: user.id,
+      p_window_start: hourStart.toISOString(),
+      p_message_count: validMessages.length,
+      p_max_hourly: RATE_LIMITS.MAX_MESSAGES_PER_HOUR,
+      p_max_daily: RATE_LIMITS.MAX_MESSAGES_PER_DAY,
+    });
+
+    if (rateError) {
+      console.error('Rate limit check failed:', rateError.message);
       return new Response(
-        JSON.stringify({ error: 'تم تجاوز الحد الأقصى للرسائل في الساعة. حاول لاحقًا.' }),
+        JSON.stringify({ error: 'خطأ في التحقق من معدل الإرسال' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!rateResult?.allowed) {
+      const reason = rateResult?.reason === 'daily_limit'
+        ? 'تم تجاوز الحد الأقصى للرسائل اليومية.'
+        : 'تم تجاوز الحد الأقصى للرسائل في الساعة. حاول لاحقًا.';
+      return new Response(
+        JSON.stringify({ error: reason }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const { data: dayRows } = await adminClient
-      .from('rate_limits')
-      .select('messages_sent')
-      .eq('user_id', user.id)
-      .gte('window_start', dayStart.toISOString());
-    const dailySent = (dayRows || []).reduce((s: number, r: any) => s + (r.messages_sent || 0), 0);
-    if (dailySent + validMessages.length > RATE_LIMITS.MAX_MESSAGES_PER_DAY) {
-      return new Response(
-        JSON.stringify({ error: 'تم تجاوز الحد الأقصى للرسائل اليومية.' }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Create campaign if not provided
+    let activeCampaignId = body.campaign_id;
+    if (activeCampaignId) {
+      const { data: ownership } = await adminClient
+        .from('campaigns')
+        .select('id')
+        .eq('id', activeCampaignId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (!ownership) {
+        return new Response(
+          JSON.stringify({ error: 'الحملة غير موجودة أو لا تملك صلاحية الوصول' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      const { data: newCampaign, error: campError } = await adminClient
+        .from('campaigns')
+        .insert({
+          user_id: user.id,
+          name: body.campaign_name || `حملة ${validMessages.length} رسالة`,
+          status: 'sending',
+          contacts_count: validMessages.length,
+          source: body.device_id ? 'mobile' : 'excel_upload',
+          device_id: body.device_id || null,
+        })
+        .select('id')
+        .single();
+
+      if (campError || !newCampaign) {
+        return new Response(
+          JSON.stringify({ error: 'فشل إنشاء الحملة' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      activeCampaignId = newCampaign.id;
+    }
+
+    // Insert campaign messages (only if we have a valid campaign_id)
+    const campaignMessages = validMessages.map(msg => ({
+      campaign_id: activeCampaignId!,
+      phone: msg.to,
+      message: msg.message,
+      status: 'pending',
+    }));
+
+    const { error: insertMsgsError } = await adminClient
+      .from('campaign_messages')
+      .insert(campaignMessages);
+
+    if (insertMsgsError) {
+      console.error('Failed to insert campaign messages');
     }
 
     // Call Hudhud API server-side
@@ -210,77 +275,89 @@ serve(async (req) => {
       body: JSON.stringify(payload)
     });
 
-    const contentType = hudhudResponse.headers.get('content-type') || '';
-    const responseText = await hudhudResponse.text();
-    
-    console.log('Hudhud API response status:', hudhudResponse.status);
-
-    let hudhudResult;
-    if (contentType.includes('application/json') && responseText.trim().startsWith('{')) {
-      try {
-        hudhudResult = JSON.parse(responseText);
-      } catch (e) {
-        console.error('Failed to parse provider response');
-        hudhudResult = { error: 'Invalid JSON response' };
-      }
-    } else {
-      console.error('Provider returned non-JSON response');
-      return new Response(
-        JSON.stringify({ 
-          error: 'خطأ في الاتصال بخادم الرسائل - الرجاء التحقق من مفتاح API أو المحاولة لاحقاً',
-          details: `Server returned status ${hudhudResponse.status}`,
-        }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    let hudhudResult: Record<string, unknown> = {};
+    try {
+      hudhudResult = await hudhudResponse.json();
+    } catch {
+      hudhudResult = { error: 'invalid_json', message: 'Provider returned non-JSON response' };
     }
 
+    // Determine actual success: HTTP 2xx AND body success flag
+    const bodySuccess = hudhudResult.success !== false && !hudhudResult.error;
+    const sentSuccess = hudhudResponse.ok && bodySuccess;
+
     // Log to database
-    const status = hudhudResponse.ok ? 'sent' : 'failed';
-    await supabase.from('sms_logs').insert({
+    await adminClient.from('sms_logs').insert({
       user_id: user.id,
       api_key_id: apiKeyData.id,
       recipients_count: validMessages.length,
-      status,
+      status: sentSuccess ? 'sent' : 'failed',
       response_data: hudhudResult,
       message_template: validMessages[0]?.message?.substring(0, 255) || null
     });
 
-    // Record rate-limit usage (bucketed per hour)
-    if (status === 'sent') {
-      const { data: existing } = await adminClient
-        .from('rate_limits')
-        .select('id, messages_sent, requests_made')
-        .eq('user_id', user.id)
-        .eq('window_start', hourStart.toISOString())
-        .maybeSingle();
+    // Update campaign status
+    if (activeCampaignId) {
+      await adminClient
+        .from('campaigns')
+        .update({
+          status: sentSuccess ? 'completed' : 'failed',
+          sent_count: sentSuccess ? validMessages.length : 0,
+          failed_count: sentSuccess ? 0 : validMessages.length,
+        })
+        .eq('id', activeCampaignId);
 
-      if (existing) {
-        await adminClient
-          .from('rate_limits')
-          .update({
-            messages_sent: (existing.messages_sent || 0) + validMessages.length,
-            requests_made: (existing.requests_made || 0) + 1,
-          })
-          .eq('id', existing.id);
-      } else {
-        await adminClient
-          .from('rate_limits')
-          .insert({
-            user_id: user.id,
-            window_start: hourStart.toISOString(),
-            messages_sent: validMessages.length,
-            requests_made: 1,
+      const msgUpdate = sentSuccess
+        ? { status: 'sent', sent_at: new Date().toISOString() }
+        : { status: 'failed', error: (hudhudResult.message as string) || 'فشل الإرسال' };
+
+      await adminClient
+        .from('campaign_messages')
+        .update(msgUpdate)
+        .eq('campaign_id', activeCampaignId)
+        .eq('status', 'pending');
+    }
+
+    // Send push notification to mobile devices on success
+    if (sentSuccess && activeCampaignId) {
+      try {
+        const { data: devices } = await adminClient
+          .from('device_push_tokens')
+          .select('push_token, device_name')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .not('push_token', 'is', null);
+
+        if (devices && devices.length > 0) {
+          const pushMessages = devices.map(device => ({
+            to: device.push_token,
+            title: 'مرسال الهدهد',
+            body: `تم إرسال ${validMessages.length} رسالة بنجاح`,
+            data: {
+              campaign_id: activeCampaignId,
+              type: 'campaign_completed',
+              sent_count: validMessages.length,
+            },
+          }));
+
+          await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pushMessages),
           });
+        }
+      } catch {
+        console.error('Failed to send push notification');
       }
     }
 
-    if (!hudhudResponse.ok) {
+    if (!sentSuccess) {
       return new Response(
         JSON.stringify({ 
-          error: hudhudResult.message || 'فشل في إرسال الرسائل',
-          details: hudhudResult
+          error: (hudhudResult.message as string) || 'فشل في إرسال الرسائل',
+          campaign_id: activeCampaignId,
         }),
-        { status: hudhudResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: hudhudResponse.ok ? 400 : hudhudResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -291,12 +368,12 @@ serve(async (req) => {
         sentCount: validMessages.length,
         skippedCount: invalidNumbers.length,
         invalidNumbers: invalidNumbers.length > 0 ? invalidNumbers : undefined,
-        response: hudhudResult
+        campaign_id: activeCampaignId,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch {
     console.error('Unexpected error in send-sms function');
     return new Response(
       JSON.stringify({ error: 'حدث خطأ غير متوقع' }),

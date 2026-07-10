@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -18,25 +18,30 @@ const ResetPassword = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const navigateTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     const handleRecoverySession = async () => {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
       const type = hashParams.get('type');
+      const refreshToken = hashParams.get('refresh_token');
 
-      if (accessToken && type === 'recovery') {
+      if (accessToken && type === 'recovery' && refreshToken) {
         const { error } = await supabase.auth.setSession({
           access_token: accessToken,
-          refresh_token: hashParams.get('refresh_token') || '',
+          refresh_token: refreshToken,
         });
         if (error) {
-          console.error('[ResetPassword] setSession error:', error);
           toast.error('فشل في استعادة الجلسة. الرابط قد يكون منتهي الصلاحية.');
         }
       }
     };
     handleRecoverySession();
+
+    return () => {
+      if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
+    };
   }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -71,10 +76,10 @@ const ResetPassword = () => {
       setSuccess(true);
       toast.success('تم تغيير كلمة المرور بنجاح');
       
-      setTimeout(() => {
+      navigateTimerRef.current = setTimeout(() => {
         navigate('/');
       }, 2000);
-    } catch (error) {
+    } catch {
       toast.error('حدث خطأ غير متوقع');
     } finally {
       setLoading(false);

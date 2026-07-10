@@ -38,7 +38,8 @@ const Auth = () => {
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
+        const messages = error.errors.map(e => e.message).join('، ');
+        toast.error(messages);
       }
       return false;
     }
@@ -65,7 +66,7 @@ const Auth = () => {
 
       toast.success('تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني');
       setIsForgotPassword(false);
-    } catch (error) {
+    } catch {
       toast.error('حدث خطأ غير متوقع');
     } finally {
       setLoading(false);
@@ -81,24 +82,20 @@ const Auth = () => {
 
     try {
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         
         if (error) {
-          // Log full error details to console for debugging
-          console.error('[Auth] signInWithPassword failed:', {
-            message: error.message,
-            status: error.status,
-            code: (error as any).code,
-            details: error,
-          });
-          toast.error(`خطأ تسجيل الدخول: ${error.message} (${error.status ?? '?'})`);
+          if (error.message === 'Email not confirmed') {
+            toast.error('البريد الإلكتروني غير مؤكد. يرجى التحقق من بريدك أو التواصل مع الدعم');
+          } else {
+            toast.error('خطأ في تسجيل الدخول: ' + error.message);
+          }
           return;
         }
         
-        console.log('[Auth] signInWithPassword success, user:', data.user?.id);
         toast.success('تم تسجيل الدخول بنجاح');
       } else {
         const redirectUrl = `${window.location.origin}/`;
@@ -115,28 +112,22 @@ const Auth = () => {
         });
         
         if (error) {
-          console.error('[Auth] signUp failed:', {
-            message: error.message,
-            status: error.status,
-            code: (error as any).code,
-            details: error,
-          });
           toast.error(`خطأ إنشاء الحساب: ${error.message} (${error.status ?? '?'})`);
           return;
         }
 
-        console.log('[Auth] signUp result:', data);
-        // Supabase may return a user with no session if email confirmation is required
         if (data.user && !data.session) {
-          toast.info('تم إنشاء الحساب - يرجى تأكيد بريدك الإلكتروني أو تعطيل التأكيد من Supabase Dashboard');
+          toast.success('تم إنشاء الحساب بنجاح. يرجى تسجيل الدخول');
+          setIsLogin(true);
           return;
         }
-        
-        toast.success('تم إنشاء الحساب بنجاح');
+        if (!data.user) {
+          toast.error('فشل إنشاء الحساب. يرجى المحاولة مرة أخرى');
+          return;
+        }
       }
     } catch (error) {
-      console.error('[Auth] Unexpected error:', error);
-      toast.error(`حدث خطأ غير متوقع: ${String(error)}`);
+      toast.error(`حدث خطأ غير متوقع: ${error instanceof Error ? error.message : 'يرجى المحاولة مرة أخرى'}`);
     } finally {
       setLoading(false);
     }

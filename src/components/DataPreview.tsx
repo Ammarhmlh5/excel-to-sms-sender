@@ -63,7 +63,7 @@ const DataPreview = ({ data }: DataPreviewProps) => {
           <tbody>
             {data.slice(0, 50).map((contact, index) => (
               <tr 
-                key={index} 
+                key={`${contact.phone}-${index}`}
                 className="border-t border-border hover:bg-secondary/50 transition-colors"
                 style={{ animationDelay: `${index * 30}ms` }}
               >

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut } from 'lucide-react';
+import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut, Link } from 'lucide-react';
 import SettingsDialog from '@/components/SettingsDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import FileUploader from '@/components/FileUploader';
 import DataPreview from '@/components/DataPreview';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import SendButton from '@/components/SendButton';
 import ColumnMapper, { ColumnMapping, autoDetectColumns } from '@/components/ColumnMapper';
@@ -17,7 +18,7 @@ interface Contact {
   customMessage?: string;
 }
 interface RawData {
-  [key: string]: any;
+  [key: string]: string | number | boolean | null;
 }
 const Index = () => {
   const {
@@ -38,9 +39,41 @@ const Index = () => {
   const [apiKey, setApiKey] = useState('');
   const [savedApiKeyId, setSavedApiKeyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [defaultMessage, setDefaultMessage] = useState('');
   const {
     toast
   } = useToast();
+  const [linkingPlatform, setLinkingPlatform] = useState<string | null>(null);
+
+  // Handle redirect from Hudhud platform via ?token=
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const platform = params.get('platform') || 'hudhud';
+
+    if (token && user) {
+      setLinkingPlatform(platform);
+      supabase.functions.invoke('verify-jwks', {
+        body: { token, platform }
+      }).then(({ data, error }) => {
+        setLinkingPlatform(null);
+        if (error || data?.error) {
+          toast({
+            title: 'فشل الربط مع المنصة',
+            description: error?.message || data?.error || 'تعذر التحقق من صحة الرابط',
+            variant: 'destructive',
+          });
+          return;
+        }
+        toast({
+          title: 'تم الربط بنجاح',
+          description: `تم ربط حسابك مع منصة ${platform}`,
+        });
+        // Clean URL
+        window.history.replaceState({}, '', window.location.pathname);
+      });
+    }
+  }, [user, toast]);
 
   // Load saved API key from database
   useEffect(() => {
@@ -64,27 +97,19 @@ const Index = () => {
   const handleApiKeyChange = async (newKey: string) => {
     setApiKey(newKey);
     if (!user || !newKey.trim()) return;
-    try {
-      if (savedApiKeyId) {
-        // Update existing key
-        await supabase.from('api_keys').update({
-          api_key: newKey
-        }).eq('id', savedApiKeyId);
-      } else {
-        // Insert new key
-        const {
-          data
-        } = await supabase.from('api_keys').insert({
-          user_id: user.id,
-          api_key: newKey,
-          key_name: 'Hudhud API Key'
-        }).select('id').single();
-        if (data) {
-          setSavedApiKeyId(data.id);
-        }
+    if (savedApiKeyId) {
+      await supabase.from('api_keys').update({
+        api_key: newKey
+      }).eq('id', savedApiKeyId);
+    } else {
+      const { data } = await supabase.from('api_keys').insert({
+        user_id: user.id,
+        api_key: newKey,
+        key_name: 'Hudhud API Key'
+      }).select('id').single();
+      if (data) {
+        setSavedApiKeyId(data.id);
       }
-    } catch (error) {
-      console.error('Error saving API key:', error);
     }
   };
   // Phone number validation
@@ -183,8 +208,7 @@ const Index = () => {
         title: "تم تحميل الملف بنجاح",
         description: hasDetected ? `تم التعرف على الأعمدة تلقائياً. ${parsedContacts.length} جهة اتصال` : `تم العثور على ${extractedHeaders.length} أعمدة. الرجاء تحديد الأعمدة المطلوبة.`
       });
-    } catch (error) {
-      console.error('Error parsing Excel:', error);
+    } catch {
       toast({
         title: "خطأ في قراءة الملف",
         description: "تعذر قراءة ملف Excel. تأكد من صحة الملف.",
@@ -212,6 +236,7 @@ const Index = () => {
       message: ''
     });
     setContacts([]);
+    setDefaultMessage('');
   }, []);
   const handleSend = async () => {
     if (contacts.length === 0) {
@@ -225,11 +250,28 @@ const Index = () => {
 
     setIsLoading(true);
     try {
-      // Prepare messages for the backend function - use message from Excel
       const messages = contacts.map(contact => ({
         to: contact.phone,
-        message: contact.customMessage || ''
+        message: contact.customMessage || defaultMessage
       })).filter(msg => msg.message.trim() !== '');
+
+      if (messages.length === 0) {
+        toast({
+          title: "لا توجد رسائل لإرسالها",
+          description: "الرجاء كتابة رسالة افتراضية أو تحديد عمود الرسالة في الملف",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const skippedCount = contacts.length - messages.length;
+      if (skippedCount > 0) {
+        toast({
+          title: `تم تجاهل ${skippedCount} جهة اتصال`,
+          description: 'لا توجد رسائل لهؤلاء — تم إرسال الباقي فقط',
+        });
+      }
 
       const { data, error } = await supabase.functions.invoke('send-sms', {
         body: { messages }
@@ -256,7 +298,6 @@ const Index = () => {
         });
       }
     } catch (error) {
-      console.error('Error sending messages:', error);
       toast({
         title: "خطأ في الإرسال",
         description: error instanceof Error ? error.message : "حدث خطأ أثناء إرسال الرسائل",
@@ -267,8 +308,8 @@ const Index = () => {
     }
   };
 
-  // Check if contacts have messages from Excel
-  const hasMessages = contacts.some(c => c.customMessage && c.customMessage.trim() !== '');
+  // Check if contacts have messages from Excel or if there's a default message
+  const hasMessages = defaultMessage.trim() !== '' || contacts.some(c => c.customMessage && c.customMessage.trim() !== '');
   const canSend = contacts.length > 0 && hasMessages;
 
   return <div className="min-h-screen bg-background">
@@ -302,6 +343,19 @@ const Index = () => {
           </div>
         </div>
       </header>
+
+      {/* Platform linking banner */}
+      {linkingPlatform && (
+        <section className="border-b border-border bg-accent/10">
+          <div className="container py-4">
+            <Alert>
+              <Link className="w-4 h-4" />
+              <AlertTitle>جاري الربط مع منصة {linkingPlatform}</AlertTitle>
+              <AlertDescription>يتم التحقق من هويتك وربط الحسابات...</AlertDescription>
+            </Alert>
+          </div>
+        </section>
+      )}
 
       {/* Features */}
       <section className="border-b border-border bg-secondary/30">
@@ -369,6 +423,30 @@ const Index = () => {
           {contacts.length > 0 && <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
               <DataPreview data={contacts} />
             </div>}
+
+          {/* Default Message (when no message column in Excel) */}
+          {contacts.length > 0 && (
+            <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm">
+                  3
+                </span>
+                <h2 className="text-xl font-semibold text-foreground">الرسالة</h2>
+              </div>
+              <textarea
+                value={defaultMessage}
+                onChange={(e) => setDefaultMessage(e.target.value)}
+                placeholder={contacts.some(c => c.customMessage) ? 'الرسالة مأخوذة من الملف بالفعل — أدخل رسالة هنا كبديل للجهات بدون رسالة' : 'اكتب الرسالة هنا — سيتم إرسالها لجميع جهات الاتصال'}
+                className="w-full min-h-[100px] p-3 rounded-lg border border-border bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                dir="rtl"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                {contacts.some(c => c.customMessage)
+                  ? 'الرسائل المخصصة في الملف لها أولوية. هذه الرسالة تُستخدم فقط للجهات التي لا تحتوي على رسالة.'
+                  : 'هذه الرسالة ستُرسل لجميع جهات الاتصال في الملف.'}
+              </p>
+            </div>
+          )}
 
           {/* Send Button */}
           <div className="animate-fade-in" style={{

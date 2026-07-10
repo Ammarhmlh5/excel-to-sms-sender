@@ -26,20 +26,25 @@ const Admin = () => {
 
   useEffect(() => {
     (async () => {
-      const [{ count: usersCount }, { count: smsCount }, { count: keysCount }, { data: profilesData }] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('sms_logs').select('*', { count: 'exact', head: true }),
-        supabase.from('api_keys').select('*', { count: 'exact', head: true }),
-        supabase.from('profiles').select('user_id, full_name, company_name, created_at').order('created_at', { ascending: false }).limit(50),
-      ]);
+      try {
+        const [{ count: usersCount }, { count: smsCount }, { count: keysCount }, { data: profilesData }] = await Promise.all([
+          supabase.from('profiles').select('*', { count: 'exact', head: true }),
+          supabase.from('sms_logs').select('*', { count: 'exact', head: true }),
+          supabase.from('api_keys').select('*', { count: 'exact', head: true }),
+          supabase.from('profiles').select('user_id, full_name, company_name, created_at').order('created_at', { ascending: false }).limit(50),
+        ]);
 
-      setStats({
-        users: usersCount ?? 0,
-        smsLogs: smsCount ?? 0,
-        apiKeys: keysCount ?? 0,
-      });
-      setProfiles(profilesData ?? []);
-      setLoading(false);
+        setStats({
+          users: usersCount ?? 0,
+          smsLogs: smsCount ?? 0,
+          apiKeys: keysCount ?? 0,
+        });
+        setProfiles(profilesData ?? []);
+      } catch (error) {
+        console.error('Admin page failed to load stats:', error);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 

@@ -25,7 +25,7 @@ interface SettingsDialogProps {
 }
 
 const SettingsDialog = ({ apiKey, onApiKeyChange, savedApiKeyId }: SettingsDialogProps) => {
-  const { user } = useAuth();
+  useAuth();
   const [open, setOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -71,16 +71,21 @@ const SettingsDialog = ({ apiKey, onApiKeyChange, savedApiKeyId }: SettingsDialo
       toast.success('تم تغيير كلمة المرور بنجاح');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (error) {
+    } catch {
       toast.error('حدث خطأ غير متوقع');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSaveApiKey = () => {
-    onApiKeyChange(localApiKey);
-    toast.success('تم حفظ مفتاح API بنجاح');
+  const handleSaveApiKey = async () => {
+    try {
+      toast.loading('جاري حفظ مفتاح API...');
+      await onApiKeyChange(localApiKey);
+      toast.success('تم حفظ مفتاح API بنجاح');
+    } catch {
+      toast.error('فشل حفظ مفتاح API');
+    }
   };
 
   return (
