@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut, Link } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut, Link as LinkIcon, Settings } from 'lucide-react';
 import SettingsDialog from '@/components/SettingsDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import FileUploader from '@/components/FileUploader';
@@ -26,6 +28,7 @@ const Index = () => {
     user,
     signOut
   } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const [file, setFile] = useState<File | null>(null);
   const [rawData, setRawData] = useState<RawData[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -336,6 +339,14 @@ const Index = () => {
               <span className="text-sm text-muted-foreground hidden sm:block">
                 {user?.email}
               </span>
+              {isAdmin && (
+                <Link to="/admin">
+                  <Button variant="default" size="sm" className="gap-2">
+                    <Settings className="w-4 h-4" />
+                    لوحة المشرف
+                  </Button>
+                </Link>
+              )}
               <SettingsDialog 
                 apiKey={apiKey} 
                 onApiKeyChange={handleApiKeyChange} 
@@ -355,7 +366,7 @@ const Index = () => {
         <section className="border-b border-border bg-accent/10">
           <div className="container py-4">
             <Alert>
-              <Link className="w-4 h-4" />
+              <LinkIcon className="w-4 h-4" />
               <AlertTitle>جاري الربط مع منصة {linkingPlatform}</AlertTitle>
               <AlertDescription>يتم التحقق من هويتك وربط الحسابات...</AlertDescription>
             </Alert>

@@ -201,6 +201,20 @@ serve(async (req) => {
           );
         }
 
+        if (role === 'user') {
+          const { count: adminCount } = await adminClient
+            .from('user_roles')
+            .select('*', { count: 'exact', head: true })
+            .eq('role', 'admin');
+
+          if (adminCount && adminCount <= 1) {
+            return new Response(
+              JSON.stringify({ error: 'لا يمكن إزالة صلاحية آخر مشرف في النظام' }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+
         if (role === 'admin') {
           const { error } = await adminClient
             .from('user_roles')
@@ -241,6 +255,26 @@ serve(async (req) => {
           );
         }
 
+        const { count: targetAdminCount } = await adminClient
+          .from('user_roles')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', targetUserId)
+          .eq('role', 'admin');
+
+        if (targetAdminCount && targetAdminCount > 0) {
+          const { count: totalAdmins } = await adminClient
+            .from('user_roles')
+            .select('*', { count: 'exact', head: true })
+            .eq('role', 'admin');
+
+          if (totalAdmins && totalAdmins <= 1) {
+            return new Response(
+              JSON.stringify({ error: 'لا يمكن حذف آخر مشرف في النظام' }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+
         await Promise.all([
           adminClient.from('user_roles').delete().eq('user_id', targetUserId),
           adminClient.from('user_links').delete().eq('local_user_id', targetUserId),
@@ -252,8 +286,13 @@ serve(async (req) => {
           adminClient.from('profiles').delete().eq('user_id', targetUserId),
         ]);
 
+        const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(targetUserId);
+        if (authDeleteError) {
+          console.error('Failed to delete user from Auth:', authDeleteError.message);
+        }
+
         return new Response(
-          JSON.stringify({ success: true, message: 'تم حذف جميع بيانات المستخدم' }),
+          JSON.stringify({ success: true, message: 'تم حذف المستخدم وجميع بياناته' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
