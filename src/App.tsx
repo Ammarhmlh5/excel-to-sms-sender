@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { AdminDashboard, UsersManagement, UserDetail } from "@/admin";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -90,7 +91,11 @@ const AppRoutes = () => (
           <Admin />
         </AdminRoute>
       }
-    />
+    >
+      <Route index element={<AdminDashboard />} />
+      <Route path="users" element={<UsersManagement />} />
+      <Route path="users/:userId" element={<UserDetail />} />
+    </Route>
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

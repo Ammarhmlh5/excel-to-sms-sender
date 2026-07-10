@@ -11,6 +11,7 @@ import DataPreview from '@/components/DataPreview';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import SendButton from '@/components/SendButton';
+import SendHistory from '@/components/SendHistory';
 import ColumnMapper, { ColumnMapping, autoDetectColumns } from '@/components/ColumnMapper';
 interface Contact {
   name: string;
@@ -44,6 +45,8 @@ const Index = () => {
     toast
   } = useToast();
   const [linkingPlatform, setLinkingPlatform] = useState<string | null>(null);
+  const [linkResult, setLinkResult] = useState<{ success: boolean; platform: string; linked: boolean } | null>(null);
+  const [campaignName, setCampaignName] = useState('');
 
   // Handle redirect from Hudhud platform via ?token=
   useEffect(() => {
@@ -65,11 +68,13 @@ const Index = () => {
           });
           return;
         }
+        setLinkResult({ success: true, platform, linked: data.linked });
         toast({
-          title: 'تم الربط بنجاح',
-          description: `تم ربط حسابك مع منصة ${platform}`,
+          title: 'تم التحقق بنجاح',
+          description: data.linked
+            ? `تم ربط حسابك مع منصة ${platform}`
+            : `تم التحقق من ${platform} — سجل الدخول أولاً لربط الحساب`,
         });
-        // Clean URL
         window.history.replaceState({}, '', window.location.pathname);
       });
     }
@@ -237,6 +242,7 @@ const Index = () => {
     });
     setContacts([]);
     setDefaultMessage('');
+    setCampaignName('');
   }, []);
   const handleSend = async () => {
     if (contacts.length === 0) {
@@ -274,7 +280,7 @@ const Index = () => {
       }
 
       const { data, error } = await supabase.functions.invoke('send-sms', {
-        body: { messages }
+        body: { messages, campaign_name: campaignName.trim() || undefined }
       });
 
       if (error) {
@@ -357,6 +363,27 @@ const Index = () => {
         </section>
       )}
 
+      {/* Link result banner */}
+      {linkResult && (
+        <section className="border-b border-border bg-primary/5">
+          <div className="container py-4">
+            <Alert>
+              <CheckCircle className="w-4 h-4" />
+              <AlertTitle>
+                {linkResult.linked
+                  ? `تم الربط مع منصة ${linkResult.platform} بنجاح`
+                  : `تم التحقق من ${linkResult.platform}`}
+              </AlertTitle>
+              <AlertDescription>
+                {linkResult.linked
+                  ? 'يمكنك الآن إدارة الحسابات المرتبطة من الإعدادات'
+                  : 'سجّل الدخول أولاً ثم أعد فتح الرابط لربط الحساب'}
+              </AlertDescription>
+            </Alert>
+          </div>
+        </section>
+      )}
+
       {/* Features */}
       <section className="border-b border-border bg-secondary/30">
         <div className="container py-6">
@@ -433,6 +460,14 @@ const Index = () => {
                 </span>
                 <h2 className="text-xl font-semibold text-foreground">الرسالة</h2>
               </div>
+              <input
+                type="text"
+                value={campaignName}
+                onChange={(e) => setCampaignName(e.target.value)}
+                placeholder="اسم الحملة (اختياري)"
+                className="w-full p-3 mb-3 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                dir="rtl"
+              />
               <textarea
                 value={defaultMessage}
                 onChange={(e) => setDefaultMessage(e.target.value)}
@@ -453,6 +488,17 @@ const Index = () => {
           animationDelay: '200ms'
         }}>
             <SendButton onClick={handleSend} disabled={!canSend} isLoading={isLoading} contactCount={contacts.length} />
+          </div>
+
+          {/* Send History */}
+          <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm">
+                4
+              </span>
+              <h2 className="text-xl font-semibold text-foreground">سجل الإرسال</h2>
+            </div>
+            <SendHistory />
           </div>
         </div>
       </main>

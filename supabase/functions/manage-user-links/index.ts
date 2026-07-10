@@ -19,9 +19,11 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -32,7 +34,7 @@ serve(async (req) => {
     }
 
     if (req.method === 'GET') {
-      const { data: links, error: fetchError } = await supabase
+      const { data: links, error: fetchError } = await adminClient
         .from('user_links')
         .select('id, external_platform, external_user_id, external_email, linked_via, is_verified, linked_at')
         .eq('local_user_id', user.id)
@@ -71,7 +73,7 @@ serve(async (req) => {
         );
       }
 
-      let query = supabase.from('user_links').delete().eq('local_user_id', user.id);
+      let query = adminClient.from('user_links').delete().eq('local_user_id', user.id);
 
       if (link_id) {
         query = query.eq('id', link_id);

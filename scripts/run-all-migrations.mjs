@@ -13,6 +13,8 @@ const MIGRATIONS = [
   { file: '20260711000004_hardening_auto_confirm.sql', desc: 'Hardening auto_confirm_email' },
   { file: '20260711000005_setup_cron_cleanup.sql', desc: 'pg_cron Cleanup' },
   { file: '20260711000006_final_db_fixes.sql', desc: 'Final DB Fixes' },
+  { file: '20260712000001_atomic_rate_limits.sql', desc: 'Atomic Rate Limits' },
+  { file: '20260712000002_audit_fixes.sql', desc: 'Audit Fixes (CHECK + indexes)' },
 ];
 
 const SQL_CONTENT = MIGRATIONS.map(m => {

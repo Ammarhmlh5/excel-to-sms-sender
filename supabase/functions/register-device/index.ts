@@ -28,10 +28,12 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -74,7 +76,7 @@ serve(async (req) => {
     }
 
     // Limit to 10 devices per user
-    const { count: deviceCount, error: countError } = await supabase
+    const { count: deviceCount, error: countError } = await adminClient
       .from('device_push_tokens')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
@@ -89,7 +91,7 @@ serve(async (req) => {
     const sanitize = (v: string | undefined, max: number) =>
       v ? v.substring(0, max).trim() : v;
 
-    const { data: existing, error: existingError } = await supabase
+    const { data: existing, error: existingError } = await adminClient
       .from('device_push_tokens')
       .select('id')
       .eq('user_id', user.id)
@@ -114,7 +116,7 @@ serve(async (req) => {
       if (platform !== undefined) updatePayload.platform = platform;
       if (app_version !== undefined) updatePayload.app_version = sanitize(app_version, 50);
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await adminClient
         .from('device_push_tokens')
         .update(updatePayload)
         .eq('id', existing.id);
@@ -126,7 +128,7 @@ serve(async (req) => {
         );
       }
     } else {
-      const { error: insertError } = await supabase
+      const { error: insertError } = await adminClient
         .from('device_push_tokens')
         .insert({
           user_id: user.id,
@@ -147,7 +149,7 @@ serve(async (req) => {
       }
 
       const platformName = platform === 'android' ? 'hudhud_android' : platform === 'ios' ? 'hudhud_ios' : 'mobile';
-      const { error: linkError } = await supabase.from('user_links').upsert({
+      const { error: linkError } = await adminClient.from('user_links').upsert({
         local_user_id: user.id,
         external_platform: platformName,
         external_user_id: device_id.trim(),

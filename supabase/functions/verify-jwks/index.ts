@@ -101,16 +101,19 @@ serve(async (req) => {
 
     // If user is authenticated, link accounts
     const authHeader = req.headers.get('Authorization');
+    let linked = false;
     if (authHeader) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } }
       });
+      const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user && payload.sub) {
-        const { error: linkError } = await supabase.from('user_links').upsert({
+        const { error: linkError } = await adminClient.from('user_links').upsert({
           local_user_id: user.id,
           external_platform: platform || 'external',
           external_user_id: payload.sub,
@@ -120,7 +123,9 @@ serve(async (req) => {
         }, {
           onConflict: 'local_user_id, external_platform',
         });
-        if (linkError) {
+        if (!linkError) {
+          linked = true;
+        } else {
           console.error('Failed to link accounts:', linkError.message);
         }
       }
@@ -129,6 +134,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         verified: true,
+        linked,
         sub: payload.sub,
         email: payload.email || null,
         device_id: payload.device_id || null,

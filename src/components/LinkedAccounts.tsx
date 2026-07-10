@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Link, Unlink, Smartphone, Globe, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -122,22 +123,20 @@ const LinkedAccounts = () => {
                 {getPlatformIcon(link.external_platform)}
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">
+                    <Badge variant={link.is_verified ? 'default' : 'secondary'}>
                       {PLATFORM_LABELS[link.external_platform] || link.external_platform}
-                    </span>
+                    </Badge>
                     {link.is_verified ? (
                       <span className="inline-flex items-center gap-1 text-xs text-primary">
                         <CheckCircle className="w-3 h-3" />
-                        موثق
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                         <AlertCircle className="w-3 h-3" />
-                        غير موثق
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground mt-1">
                     عبر: {LINK_VIA_LABELS[link.linked_via] || link.linked_via}
                     {link.external_email && ` • ${link.external_email}`}
                   </p>

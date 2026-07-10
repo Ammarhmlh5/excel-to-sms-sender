@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.cleanup-old-data]
 verify_jwt = false
+
+[functions.admin-manage-users]
+verify_jwt = false
+
+[functions.manage-user-links]
+verify_jwt = false
