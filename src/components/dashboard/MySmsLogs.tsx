@@ -3,7 +3,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, CheckCircle, XCircle } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import NewSendDialog from './NewSendDialog';
 
 interface SmsLog {
   id: string;
@@ -21,6 +23,7 @@ export function MySmsLogs() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sendOpen, setSendOpen] = useState(false);
   const pageSize = 20;
 
   useEffect(() => {
@@ -82,10 +85,16 @@ export function MySmsLogs() {
           <h1 className="text-2xl font-bold text-gray-900">سجل الإرسال</h1>
           <p className="text-sm text-gray-500 mt-1">سجل رسائل SMS المرسلة</p>
         </div>
-        <div className="text-sm text-gray-500">
-          {totalCount} رسالة
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">{totalCount} رسالة</span>
+          <Button size="sm" className="gap-2" onClick={() => setSendOpen(true)}>
+            <Plus className="w-4 h-4" />
+            إرسال جديد
+          </Button>
         </div>
       </div>
+
+      <NewSendDialog open={sendOpen} onOpenChange={setSendOpen} onSent={fetchLogs} />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
