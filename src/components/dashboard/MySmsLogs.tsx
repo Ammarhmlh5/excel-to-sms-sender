@@ -11,7 +11,7 @@ interface SmsLog {
   message_template: string | null;
   status: string;
   created_at: string;
-  api_keys?: { api_key: string } | null;
+  api_keys?: { user_id?: string } | null;
 }
 
 export function MySmsLogs() {
