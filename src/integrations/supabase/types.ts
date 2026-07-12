@@ -44,6 +44,143 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_messages: {
+        Row: {
+          campaign_id: string
+          created_at: string | null
+          error: string | null
+          id: string
+          message: string
+          name: string | null
+          phone: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          message: string
+          name?: string | null
+          phone: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          message?: string
+          name?: string | null
+          phone?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_messages_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          contacts_count: number
+          created_at: string | null
+          device_id: string | null
+          failed_count: number
+          id: string
+          metadata: Json | null
+          name: string
+          platform_id: string | null
+          sent_count: number
+          source: string | null
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          contacts_count?: number
+          created_at?: string | null
+          device_id?: string | null
+          failed_count?: number
+          id?: string
+          metadata?: Json | null
+          name?: string
+          platform_id?: string | null
+          sent_count?: number
+          source?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          contacts_count?: number
+          created_at?: string | null
+          device_id?: string | null
+          failed_count?: number
+          id?: string
+          metadata?: Json | null
+          name?: string
+          platform_id?: string | null
+          sent_count?: number
+          source?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      device_push_tokens: {
+        Row: {
+          app_version: string | null
+          created_at: string | null
+          device_id: string
+          device_name: string | null
+          hardware_id: string | null
+          id: string
+          is_active: boolean | null
+          last_seen_at: string | null
+          platform: string | null
+          push_token: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string | null
+          device_id: string
+          device_name?: string | null
+          hardware_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_seen_at?: string | null
+          platform?: string | null
+          push_token?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string | null
+          device_id?: string
+          device_name?: string | null
+          hardware_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_seen_at?: string | null
+          platform?: string | null
+          push_token?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company_name: string | null
@@ -138,6 +275,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_links: {
+        Row: {
+          external_email: string | null
+          external_platform: string
+          external_user_id: string
+          id: string
+          is_verified: boolean | null
+          linked_at: string | null
+          linked_via: string | null
+          local_user_id: string
+        }
+        Insert: {
+          external_email?: string | null
+          external_platform: string
+          external_user_id: string
+          id?: string
+          is_verified?: boolean | null
+          linked_at?: string | null
+          linked_via?: string | null
+          local_user_id: string
+        }
+        Update: {
+          external_email?: string | null
+          external_platform?: string
+          external_user_id?: string
+          id?: string
+          is_verified?: boolean | null
+          linked_at?: string | null
+          linked_via?: string | null
+          local_user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
