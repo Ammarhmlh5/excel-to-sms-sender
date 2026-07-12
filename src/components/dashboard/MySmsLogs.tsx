@@ -43,8 +43,8 @@ export function MySmsLogs() {
 
     let query = supabase
       .from('sms_logs')
-      .select('*, api_keys!inner(user_id)', { count: 'exact' })
-      .eq('api_keys.user_id', user.id)
+      .select('*', { count: 'exact' })
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
 
