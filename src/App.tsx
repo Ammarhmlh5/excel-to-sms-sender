@@ -8,7 +8,6 @@ import { Spinner } from "@/components/Spinner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { lazy, Suspense } from "react";
 
-import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
@@ -70,11 +69,7 @@ const AppRoutes = () => (
   <Routes>
     <Route
       path="/"
-      element={
-        <ProtectedRoute>
-          <Index />
-        </ProtectedRoute>
-      }
+      element={<Navigate to="/dashboard" replace />}
     />
     <Route
       path="/auth"

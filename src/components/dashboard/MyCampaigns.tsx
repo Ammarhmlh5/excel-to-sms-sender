@@ -3,8 +3,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Send, CheckCircle, XCircle, Clock, Eye } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Send, CheckCircle, XCircle, Clock, Eye, Plus } from 'lucide-react';
 import CampaignDetail from '@/components/CampaignDetail';
+import { NewCampaignDialog } from '@/components/dashboard/NewCampaignDialog';
 
 interface Campaign {
   id: string;
@@ -23,6 +25,7 @@ export function MyCampaigns() {
   const [loading, setLoading] = useState(true);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [newCampaignOpen, setNewCampaignOpen] = useState(false);
 
   useEffect(() => {
     fetchCampaigns();
@@ -85,8 +88,14 @@ export function MyCampaigns() {
           <h1 className="text-2xl font-bold text-gray-900">حملاتي</h1>
           <p className="text-sm text-gray-500 mt-1">إدارة ومتابعة حملات الإرسال</p>
         </div>
-        <div className="text-sm text-gray-500">
-          {campaigns.length} حملة
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">
+            {campaigns.length} حملة
+          </span>
+          <Button onClick={() => setNewCampaignOpen(true)} className="gap-2">
+            <Plus className="w-4 h-4" />
+            حملة جديدة
+          </Button>
         </div>
       </div>
 
@@ -145,7 +154,11 @@ export function MyCampaigns() {
             <div className="text-center py-12">
               <Send className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500">لا توجد حملات بعد</p>
-              <p className="text-sm text-gray-400 mt-1">ابدأ بإرسال أول حملة</p>
+              <p className="text-sm text-gray-400 mt-1 mb-4">ابدأ بإرسال أول حملة</p>
+              <Button onClick={() => setNewCampaignOpen(true)} className="gap-2">
+                <Plus className="w-4 h-4" />
+                حملة جديدة
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -193,6 +206,12 @@ export function MyCampaigns() {
         campaign={selectedCampaign}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+      />
+
+      <NewCampaignDialog
+        open={newCampaignOpen}
+        onOpenChange={setNewCampaignOpen}
+        onCampaignSent={fetchCampaigns}
       />
     </div>
   );
