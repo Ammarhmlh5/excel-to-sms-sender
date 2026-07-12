@@ -39,7 +39,6 @@ export function AccountSettings() {
       toast.error('فشل تحديث كلمة المرور: ' + error.message);
     } else {
       toast.success('تم تحديث كلمة المرور بنجاح');
-      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     }

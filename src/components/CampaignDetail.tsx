@@ -178,7 +178,7 @@ export default function CampaignDetail({ campaign, open, onOpenChange, onDelete,
 
       if (data?.success) {
         toast({ title: 'تمت إعادة الإرسال', description: data.message });
-        fetchMessages();
+        fetchMessages(page, statusFilter);
         onDelete?.();
       } else {
         toast({ title: 'فشل إعادة الإرسال', description: data?.error || 'خطأ غير معروف', variant: 'destructive' });
