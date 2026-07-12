@@ -1,9 +1,5 @@
-<<<<<<< HEAD
-export function formatDate(dateStr: string | null | undefined): string {
+export function formatDate(dateStr: string | null | undefined, locale: string = 'ar'): string {
   if (!dateStr) return '';
-=======
-export function formatDate(dateStr: string, locale: string = 'ar'): string {
->>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
   const d = new Date(dateStr);
   return d.toLocaleDateString(locale, {
     month: 'short',
@@ -13,12 +9,8 @@ export function formatDate(dateStr: string, locale: string = 'ar'): string {
   });
 }
 
-<<<<<<< HEAD
-export function formatDateFull(dateStr: string | null | undefined): string {
+export function formatDateFull(dateStr: string | null | undefined, locale: string = 'ar'): string {
   if (!dateStr) return '';
-=======
-export function formatDateFull(dateStr: string, locale: string = 'ar'): string {
->>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
   const d = new Date(dateStr);
   return d.toLocaleDateString(locale, {
     year: 'numeric',
@@ -29,12 +21,8 @@ export function formatDateFull(dateStr: string, locale: string = 'ar'): string {
   });
 }
 
-<<<<<<< HEAD
-export function formatDateShort(dateStr: string | null | undefined): string {
+export function formatDateShort(dateStr: string | null | undefined, locale: string = 'ar'): string {
   if (!dateStr) return '';
-=======
-export function formatDateShort(dateStr: string, locale: string = 'ar'): string {
->>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
   const d = new Date(dateStr);
   return d.toLocaleDateString(locale);
 }

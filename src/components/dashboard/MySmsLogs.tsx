@@ -5,23 +5,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, CheckCircle, XCircle, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import NewSendDialog from './NewSendDialog';
 
 interface SmsLog {
   id: string;
-<<<<<<< HEAD
   recipients_count: number;
   message_template: string | null;
   status: string;
   created_at: string;
-  api_keys?: { user_id?: string } | null;
-=======
-  message_template: string | null;
-  recipients_count: number;
-  status: string;
-  created_at: string;
-  api_key_id: string | null;
->>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
 }
 
 export function MySmsLogs() {
@@ -31,7 +21,6 @@ export function MySmsLogs() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sendOpen, setSendOpen] = useState(false);
   const pageSize = 20;
 
   useEffect(() => {
@@ -43,8 +32,8 @@ export function MySmsLogs() {
 
     let query = supabase
       .from('sms_logs')
-      .select('*', { count: 'exact' })
-      .eq('user_id', user.id)
+      .select('*, api_keys!inner(user_id)', { count: 'exact' })
+      .eq('api_keys.user_id', user.id)
       .order('created_at', { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
 
@@ -95,14 +84,12 @@ export function MySmsLogs() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-500">{totalCount} رسالة</span>
-          <Button size="sm" className="gap-2" onClick={() => setSendOpen(true)}>
+          <Button size="sm" className="gap-2" onClick={() => setPage(1)}>
             <Plus className="w-4 h-4" />
-            إرسال جديد
+            تحديث
           </Button>
         </div>
       </div>
-
-      <NewSendDialog open={sendOpen} onOpenChange={setSendOpen} onSent={fetchLogs} />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -131,11 +118,7 @@ export function MySmsLogs() {
                   <thead>
                     <tr className="border-b">
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">عدد المستلمين</th>
-<<<<<<< HEAD
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">الرسالة</th>
-=======
-                      <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">قالب الرسالة</th>
->>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">الحالة</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">التاريخ</th>
                     </tr>
@@ -144,13 +127,9 @@ export function MySmsLogs() {
                     {logs.map((log) => (
                       <tr key={log.id} className="border-b hover:bg-gray-50">
                         <td className="py-3 px-4 font-mono text-sm">{log.recipients_count}</td>
-<<<<<<< HEAD
-                        <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{log.message_template || '—'}</td>
-=======
                         <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate" title={log.message_template || ''}>
-                          {log.message_template || '-'}
+                          {log.message_template || '—'}
                         </td>
->>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
                         <td className="py-3 px-4">{getStatusBadge(log.status)}</td>
                         <td className="py-3 px-4 text-sm text-gray-500">
                           {new Date(log.created_at).toLocaleDateString('ar-EG')}

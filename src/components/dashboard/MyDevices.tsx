@@ -10,21 +10,12 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 interface Device {
   id: string;
   device_id: string;
-<<<<<<< HEAD
   platform: string | null;
   device_name: string | null;
   app_version: string | null;
   is_active: boolean | null;
   last_seen_at: string | null;
   created_at: string | null;
-=======
-  platform: string;
-  device_name: string;
-  app_version: string;
-  is_active: boolean;
-  last_seen_at: string;
-  created_at: string;
->>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
 }
 
 export function MyDevices() {
@@ -143,11 +134,7 @@ export function MyDevices() {
                     </div>
                     <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
                       <span>
-<<<<<<< HEAD
                         آخر اتصال: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString('ar-EG') : '—'}
-=======
-                        آخر اتصال: {new Date(device.last_seen_at).toLocaleString('ar-EG')}
->>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
                       </span>
                       <span>
                         مسجل منذ: {device.created_at ? new Date(device.created_at).toLocaleDateString('ar-EG') : '—'}
