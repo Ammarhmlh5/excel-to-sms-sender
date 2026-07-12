@@ -503,15 +503,23 @@ const Index = () => {
                 </span>
                 <h2 className="text-xl font-semibold text-foreground">الرسالة</h2>
               </div>
+              <label htmlFor="campaign-name" className="block text-sm font-medium mb-2 text-foreground">
+                اسم الحملة
+              </label>
               <input
+                id="campaign-name"
                 type="text"
                 value={campaignName}
                 onChange={(e) => setCampaignName(e.target.value)}
-                placeholder="اسم الحملة (اختياري)"
+                placeholder="اختياري"
                 className="w-full p-3 mb-3 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                 dir="rtl"
               />
+              <label htmlFor="default-message" className="block text-sm font-medium mb-2 text-foreground">
+                الرسالة الافتراضية
+              </label>
               <textarea
+                id="default-message"
                 value={defaultMessage}
                 onChange={(e) => setDefaultMessage(e.target.value)}
                 placeholder={contacts.some(c => c.customMessage) ? 'الرسالة مأخوذة من الملف بالفعل — أدخل رسالة هنا كبديل للجهات بدون رسالة' : 'اكتب الرسالة هنا — سيتم إرسالها لجميع جهات الاتصال'}
@@ -535,8 +543,10 @@ const Index = () => {
                 </span>
                 <h2 className="text-xl font-semibold text-foreground">طريقة الإرسال</h2>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="طريقة الإرسال">
                 <button
+                  role="radio"
+                  aria-checked={sendMode === 'email'}
                   onClick={() => setSendMode('email')}
                   className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
                     sendMode === 'email'
@@ -551,6 +561,8 @@ const Index = () => {
                   </div>
                 </button>
                 <button
+                  role="radio"
+                  aria-checked={sendMode === 'sms'}
                   onClick={() => setSendMode('sms')}
                   className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
                     sendMode === 'sms'

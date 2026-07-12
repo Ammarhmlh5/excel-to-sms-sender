@@ -1,9 +1,0 @@
-export { default as AdminLayout } from './AdminLayout';
-export { default as AdminDashboard } from './AdminDashboard';
-export { default as UsersManagement } from './UsersManagement';
-export { default as UserDetail } from './UserDetail';
-export { default as CampaignsOverview } from './CampaignsOverview';
-export { default as SmsLogsView } from './SmsLogsView';
-export { default as ApiKeysView } from './ApiKeysView';
-export { default as DevicesView } from './DevicesView';
-export { default as RolesManagement } from './RolesManagement';

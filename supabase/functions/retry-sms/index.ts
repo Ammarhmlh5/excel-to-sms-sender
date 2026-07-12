@@ -143,24 +143,39 @@ serve(async (req) => {
       messages: failedMessages.map(m => ({ to: m.phone, message: m.message })),
     };
 
-    const hudhudResponse = await fetch('https://www.hloov.com/api/sms/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
+    const hudhudController = new AbortController();
+    const hudhudTimeout = setTimeout(() => hudhudController.abort(), 30000);
     let hudhudResult: Record<string, unknown> = {};
+    let hudhudResponse: Response | undefined;
     try {
-      hudhudResult = await hudhudResponse.json();
-    } catch {
-      hudhudResult = { error: 'invalid_json', message: 'Provider returned non-JSON response' };
+      hudhudResponse = await fetch('https://www.hloov.com/api/sms/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: hudhudController.signal,
+      });
+      try {
+        hudhudResult = await hudhudResponse.json();
+      } catch {
+        hudhudResult = { error: 'invalid_json', message: 'Provider returned non-JSON response' };
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return new Response(
+          JSON.stringify({ error: 'انتهت مهلة الاتصال ببوابة الرسائل' }),
+          { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(hudhudTimeout);
     }
 
     const bodySuccess = hudhudResult.success !== false && !hudhudResult.error;
-    const sentSuccess = hudhudResponse.ok && bodySuccess;
+    const sentSuccess = hudhudResponse!.ok && bodySuccess;
 
     // Update message statuses AFTER API call
     const msgIds = failedMessages.map(m => m.id);

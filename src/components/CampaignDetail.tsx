@@ -23,6 +23,7 @@ import { MessageStatusBadge } from '@/components/StatusBadges';
 import { getMessageStatusLabel } from '@/lib/statusData';
 import { formatDate } from '@/lib/formatDate';
 import { Spinner } from '@/components/Spinner';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface CampaignDetailProps {
   campaign: CampaignInfo | null;
@@ -44,12 +45,13 @@ export default function CampaignDetail({ campaign, open, onOpenChange, onDelete,
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const PAGE_SIZE = 50;
 
   const fetchStatusCounts = useCallback(async (campaignId: string) => {
     const { data } = await supabase
       .from('campaign_messages')
-      .select('status')
+      .select('status', { count: 'exact' })
       .eq('campaign_id', campaignId);
     if (data) {
       const counts: Record<string, number> = {};
@@ -138,7 +140,7 @@ export default function CampaignDetail({ campaign, open, onOpenChange, onDelete,
 
   const handleDelete = async () => {
     if (!user || !campaign) return;
-    if (!confirm('هل أنت متأكد من حذف هذه الحملة؟ سيتم حذف جميع الرسائل المرتبطة بها.')) return;
+    setDeleteConfirmOpen(false);
 
     setDeleting(true);
     const { error } = await supabase
@@ -216,6 +218,7 @@ export default function CampaignDetail({ campaign, open, onOpenChange, onDelete,
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
@@ -246,7 +249,7 @@ export default function CampaignDetail({ campaign, open, onOpenChange, onDelete,
                   <Download className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={handleDelete}
+                  onClick={() => setDeleteConfirmOpen(true)}
                   disabled={deleting}
                   className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
                   title="حذف الحملة"
@@ -387,5 +390,14 @@ export default function CampaignDetail({ campaign, open, onOpenChange, onDelete,
         )}
       </DialogContent>
     </Dialog>
+    <ConfirmDialog
+      open={deleteConfirmOpen}
+      onOpenChange={setDeleteConfirmOpen}
+      title="حذف الحملة"
+      description="هل أنت متأكد من حذف هذه الحملة؟ سيتم حذف جميع الرسائل المرتبطة بها."
+      onConfirm={handleDelete}
+      loading={deleting}
+    />
+    </>
   );
 }

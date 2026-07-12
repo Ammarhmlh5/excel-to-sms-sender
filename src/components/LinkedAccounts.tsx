@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Link, Unlink, Smartphone, Globe, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import { Spinner } from '@/components/Spinner';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface UserLink {
   id: string;
@@ -35,6 +36,8 @@ const LinkedAccounts = () => {
   const [links, setLinks] = useState<UserLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [unlinkTarget, setUnlinkTarget] = useState<{ id: string; platform: string } | null>(null);
 
   const fetchLinks = useCallback(async () => {
     setLoading(true);
@@ -53,22 +56,23 @@ const LinkedAccounts = () => {
     fetchLinks();
   }, [fetchLinks]);
 
-  const handleUnlink = async (linkId: string, platform: string) => {
-    if (!confirm(`هل أنت متأكد من فك ارتباط ${PLATFORM_LABELS[platform] || platform}؟`)) return;
-
-    setDeleting(linkId);
+  const handleUnlink = async () => {
+    if (!unlinkTarget) return;
+    setUnlinkConfirmOpen(false);
+    setDeleting(unlinkTarget.id);
     try {
       const { error } = await supabase.functions.invoke('manage-user-links', {
-        body: { link_id: linkId },
+        body: { link_id: unlinkTarget.id },
         method: 'DELETE',
       });
       if (error) throw new Error(error.message);
       toast.success('تم فك الارتباط بنجاح');
-      setLinks(prev => prev.filter(l => l.id !== linkId));
+      setLinks(prev => prev.filter(l => l.id !== unlinkTarget.id));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'خطأ في فك الارتباط');
     } finally {
       setDeleting(null);
+      setUnlinkTarget(null);
     }
   };
 
@@ -88,6 +92,7 @@ const LinkedAccounts = () => {
   }
 
   return (
+    <>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
@@ -146,7 +151,7 @@ const LinkedAccounts = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => handleUnlink(link.id, link.external_platform)}
+                onClick={() => { setUnlinkTarget({ id: link.id, platform: link.external_platform }); setUnlinkConfirmOpen(true); }}
                 disabled={deleting === link.id}
                 className="text-destructive hover:text-destructive"
               >
@@ -161,6 +166,15 @@ const LinkedAccounts = () => {
         </div>
       )}
     </div>
+    <ConfirmDialog
+      open={unlinkConfirmOpen}
+      onOpenChange={setUnlinkConfirmOpen}
+      title="فك الارتباط"
+      description={`هل أنت متأكد من فك ارتباط ${unlinkTarget ? (PLATFORM_LABELS[unlinkTarget.platform] || unlinkTarget.platform) : ''}؟`}
+      onConfirm={handleUnlink}
+      loading={!!deleting}
+    />
+    </>
   );
 };
 

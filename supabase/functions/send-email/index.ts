@@ -129,11 +129,14 @@ serve(async (req) => {
     }
 
     // Rate limit check
+    const now = new Date();
+    const hourStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), 0, 0));
     const { data: rateResult, error: rateError } = await adminClient.rpc('check_rate_limit_and_increment', {
       p_user_id: user.id,
-      p_limit_hourly: 5000,
-      p_limit_daily: 10000,
-      p_messages_to_add: validMessages.length
+      p_window_start: hourStart.toISOString(),
+      p_message_count: validMessages.length,
+      p_max_hourly: 5000,
+      p_max_daily: 10000,
     });
 
     if (rateError || !rateResult) {
@@ -206,28 +209,43 @@ ${messagesText}
 ---
 تم الإرسال عبر مرسال الهدهد`;
 
-    const resendResponse = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${resendApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "مرسال الهدهد <onboarding@resend.dev>",
-        to: [user.email],
-        subject: emailSubject,
-        text: emailBody,
-      }),
-    });
-
+    const resendController = new AbortController();
+    const resendTimeout = setTimeout(() => resendController.abort(), 30000);
     let resendResult: Record<string, unknown> = {};
+    let resendResponse: Response | undefined;
     try {
-      resendResult = await resendResponse.json();
-    } catch {
-      resendResult = { error: "invalid_json" };
+      resendResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: Deno.env.get("RESEND_FROM_EMAIL") || "مرسال الهدهد <onboarding@resend.dev>",
+          to: [user.email],
+          subject: emailSubject,
+          text: emailBody,
+        }),
+        signal: resendController.signal,
+      });
+      try {
+        resendResult = await resendResponse.json();
+      } catch {
+        resendResult = { error: "invalid_json" };
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return new Response(
+          JSON.stringify({ error: 'انتهت مهلة الاتصال بخدمة البريد' }),
+          { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(resendTimeout);
     }
 
-    const emailSuccess = resendResponse.ok && !resendResult.error;
+    const emailSuccess = resendResponse!.ok && !resendResult.error;
 
     // STEP 4: تحديث حالة الحملة والرسائل
     const finalStatus = emailSuccess ? "completed" : "failed";
@@ -258,7 +276,7 @@ ${messagesText}
           error: (resendResult.message as string) || "فشل إرسال البريد الإلكتروني",
           campaign_id: activeCampaignId,
         }),
-        { status: resendResponse.ok ? 400 : resendResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: resendResponse!.ok ? 400 : resendResponse!.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

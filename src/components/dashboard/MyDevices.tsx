@@ -5,22 +5,34 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Smartphone, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Device {
   id: string;
   device_id: string;
+<<<<<<< HEAD
   platform: string | null;
   device_name: string | null;
   app_version: string | null;
   is_active: boolean | null;
   last_seen_at: string | null;
   created_at: string | null;
+=======
+  platform: string;
+  device_name: string;
+  app_version: string;
+  is_active: boolean;
+  last_seen_at: string;
+  created_at: string;
+>>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
 }
 
 export function MyDevices() {
   const { user } = useAuth();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDevices();
@@ -41,13 +53,14 @@ export function MyDevices() {
     setLoading(false);
   };
 
-  const handleRemoveDevice = async (deviceId: string) => {
-    if (!confirm('هل أنت متأكد من إزالة هذا الجهاز؟')) return;
+  const handleRemoveDevice = async () => {
+    if (!removeTarget) return;
+    setRemoveConfirmOpen(false);
 
     const { error } = await supabase
       .from('device_push_tokens')
       .update({ is_active: false })
-      .eq('id', deviceId);
+      .eq('id', removeTarget);
 
     if (error) {
       toast.error('فشل إزالة الجهاز');
@@ -55,6 +68,7 @@ export function MyDevices() {
       toast.success('تم إزالة الجهاز');
       fetchDevices();
     }
+    setRemoveTarget(null);
   };
 
   const getPlatformIcon = (platform: string | null) => {
@@ -85,6 +99,7 @@ export function MyDevices() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -128,7 +143,11 @@ export function MyDevices() {
                     </div>
                     <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
                       <span>
+<<<<<<< HEAD
                         آخر اتصال: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString('ar-EG') : '—'}
+=======
+                        آخر اتصال: {new Date(device.last_seen_at).toLocaleString('ar-EG')}
+>>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
                       </span>
                       <span>
                         مسجل منذ: {device.created_at ? new Date(device.created_at).toLocaleDateString('ar-EG') : '—'}
@@ -137,7 +156,7 @@ export function MyDevices() {
                   </div>
                   {device.is_active && (
                     <button
-                      onClick={() => handleRemoveDevice(device.id)}
+                      onClick={() => { setRemoveTarget(device.id); setRemoveConfirmOpen(true); }}
                       className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-5 h-5" />
@@ -150,5 +169,13 @@ export function MyDevices() {
         </CardContent>
       </Card>
     </div>
+    <ConfirmDialog
+      open={removeConfirmOpen}
+      onOpenChange={setRemoveConfirmOpen}
+      title="إزالة الجهاز"
+      description="هل أنت متأكد من إزالة هذا الجهاز؟"
+      onConfirm={handleRemoveDevice}
+    />
+    </>
   );
 }

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/PasswordInput';
 import { Settings, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -90,26 +91,26 @@ export function AccountSettings() {
         <CardContent className="space-y-4">
           <div>
             <Label htmlFor="newPassword">كلمة المرور الجديدة</Label>
-            <Input
+            <PasswordInput
               id="newPassword"
-              type="password"
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={setNewPassword}
               placeholder="أدخل كلمة المرور الجديدة"
               className="mt-1"
               dir="ltr"
+              autoComplete="new-password"
             />
           </div>
           <div>
             <Label htmlFor="confirmPassword">تأكيد كلمة المرور</Label>
-            <Input
+            <PasswordInput
               id="confirmPassword"
-              type="password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={setConfirmPassword}
               placeholder="أعد إدخال كلمة المرور الجديدة"
               className="mt-1"
               dir="ltr"
+              autoComplete="new-password"
             />
           </div>
           <Button

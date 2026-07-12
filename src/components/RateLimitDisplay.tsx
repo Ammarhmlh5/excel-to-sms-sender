@@ -27,8 +27,9 @@ export default function RateLimitDisplay() {
   useEffect(() => {
     if (!user) return;
 
+    let cancelled = false;
+
     const fetchUsage = async () => {
-      setLoading(true);
       const now = new Date();
       const hourStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), 0, 0));
       const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
@@ -38,6 +39,8 @@ export default function RateLimitDisplay() {
         .select('messages_sent, window_start')
         .eq('user_id', user.id)
         .gte('window_start', dayStart.toISOString());
+
+      if (cancelled) return;
 
       if (data) {
         const hourly = data
@@ -52,7 +55,10 @@ export default function RateLimitDisplay() {
 
     fetchUsage();
     const interval = setInterval(fetchUsage, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [user]);
 
   if (loading) {

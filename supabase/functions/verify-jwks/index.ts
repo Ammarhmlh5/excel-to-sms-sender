@@ -21,6 +21,25 @@ const RATE_LIMIT_MAX = 10;
 const jwksCache = new Map<string, { keySet: ReturnType<typeof createRemoteJWKSet>; fetchedAt: number }>();
 const JWKS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
+// In-memory IP rate limiter (per-isolate, resets on cold start)
+const ipRateLimit = new Map<string, { count: number; windowStart: number }>();
+
+function checkIpRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const hourStart = new Date(now);
+  hourStart.setUTCMinutes(0, 0, 0);
+  const windowMs = hourStart.getTime();
+
+  const entry = ipRateLimit.get(ip);
+  if (!entry || entry.windowStart !== windowMs) {
+    ipRateLimit.set(ip, { count: 1, windowStart: windowMs });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return false;
+  entry.count++;
+  return true;
+}
+
 function getCachedJWKS(jwksUri: string): ReturnType<typeof createRemoteJWKSet> {
   const cached = jwksCache.get(jwksUri);
   if (cached && Date.now() - cached.fetchedAt < JWKS_CACHE_TTL) {
@@ -45,24 +64,17 @@ serve(async (req) => {
   try {
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
 
-    // Database-based rate limiting (works across multiple Edge Function instances)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
-    const { data: rateResult } = await adminClient.rpc('check_rate_limit_and_increment', {
-      p_user_id: clientIp,
-      p_limit_hourly: RATE_LIMIT_MAX,
-      p_limit_daily: RATE_LIMIT_MAX * 24,
-      p_messages_to_add: 1
-    });
-
-    if (!rateResult) {
+    // In-memory IP rate limiting (10 requests/hour/IP)
+    if (!checkIpRateLimit(clientIp)) {
       return new Response(
         JSON.stringify({ error: 'تم تجاوز الحد المسموح. حاول مرة أخرى لاحقاً' }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     let body: VerifyRequest;
     try {

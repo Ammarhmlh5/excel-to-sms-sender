@@ -17,7 +17,8 @@ const DataPreview = ({ data }: DataPreviewProps) => {
   if (data.length === 0) return null;
 
   const hasCustomMessages = data.some(contact => contact.customMessage);
-  const displayData = showAll ? data : data.slice(0, 50);
+  const MAX_DISPLAY = 200;
+  const displayData = showAll ? data.slice(0, MAX_DISPLAY) : data.slice(0, 50);
   const hasMore = data.length > 50;
 
   return (
@@ -89,7 +90,11 @@ const DataPreview = ({ data }: DataPreviewProps) => {
               onClick={() => setShowAll(!showAll)}
               className="text-sm text-primary hover:underline"
             >
-              {showAll ? 'عرض أقل' : `عرض الكل (${data.length} جهة اتصال)`}
+              {showAll
+                ? (data.length > MAX_DISPLAY
+                    ? `عرض أقل (من أصل ${data.length} جهة اتصال)`
+                    : 'عرض أقل')
+                : `عرض الكل (${data.length} جهة اتصال)`}
             </button>
           </div>
         )}

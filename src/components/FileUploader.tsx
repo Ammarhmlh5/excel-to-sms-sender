@@ -82,6 +82,7 @@ const FileUploader = ({ onFileSelect, selectedFile, onClear }: FileUploaderProps
         <button
           onClick={onClear}
           className="p-2 hover:bg-destructive/10 rounded-full transition-colors"
+          aria-label="إزالة الملف"
         >
           <X className="w-5 h-5 text-destructive" />
         </button>

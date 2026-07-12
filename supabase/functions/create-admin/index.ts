@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
@@ -55,7 +55,7 @@ serve(async (req) => {
       // Check if user already exists
       if (authError.message.includes('already been registered') || authError.code === 'email_exists') {
         // Find existing user
-        const { data: users } = await adminClient.auth.admin.listUsers();
+        const { data: users } = await adminClient.auth.admin.listUsers({ filter: email });
         const existingUser = users?.find(u => u.email === email);
         
         if (!existingUser) {

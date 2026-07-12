@@ -273,25 +273,40 @@ serve(async (req) => {
       messages: validMessages.map(({ to, message }) => ({ to, message })),
     };
 
-    const hudhudResponse = await fetch('https://www.hloov.com/api/sms/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(payload)
-    });
-
+    const hudhudController = new AbortController();
+    const hudhudTimeout = setTimeout(() => hudhudController.abort(), 30000);
     let hudhudResult: Record<string, unknown> = {};
+    let hudhudResponse: Response | undefined;
     try {
-      hudhudResult = await hudhudResponse.json();
-    } catch {
-      hudhudResult = { error: 'invalid_json', message: 'Provider returned non-JSON response' };
+      hudhudResponse = await fetch('https://www.hloov.com/api/sms/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: hudhudController.signal,
+      });
+      try {
+        hudhudResult = await hudhudResponse.json();
+      } catch {
+        hudhudResult = { error: 'invalid_json', message: 'Provider returned non-JSON response' };
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return new Response(
+          JSON.stringify({ error: 'انتهت مهلة الاتصال ببوابة الرسائل' }),
+          { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(hudhudTimeout);
     }
 
     // Determine actual success: HTTP 2xx AND body success flag
     const bodySuccess = hudhudResult.success !== false && !hudhudResult.error;
-    const sentSuccess = hudhudResponse.ok && bodySuccess;
+    const sentSuccess = hudhudResponse!.ok && bodySuccess;
 
     // Log to database
     await adminClient.from('sms_logs').insert({
@@ -364,7 +379,7 @@ serve(async (req) => {
           error: (hudhudResult.message as string) || 'فشل في إرسال الرسائل',
           campaign_id: activeCampaignId,
         }),
-        { status: hudhudResponse.ok ? 400 : hudhudResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: hudhudResponse!.ok ? 400 : hudhudResponse!.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

@@ -1,29 +1,38 @@
 /**
  * Run this script to create the admin user in Supabase.
+ *
  * Usage:
- *   1. Paste your service_role key below (from Supabase Dashboard → Settings → API)
- *   2. Run: node create-admin.mjs
+ *   node create-admin.mjs --email=admin@sms.com --password=YourSecurePassword --url=https://xxx.supabase.co --key=YOUR_SERVICE_ROLE_KEY
+ *
+ * All four flags are required.
  */
 
-const SUPABASE_URL = 'https://jqilueudbhgcgskvkvhe.supabase.co';
+function parseArgs(args) {
+  const parsed = {};
+  for (const arg of args) {
+    if (arg.startsWith('--')) {
+      const [key, ...rest] = arg.slice(2).split('=');
+      parsed[key] = rest.join('=');
+    }
+  }
+  return parsed;
+}
 
-// ← Paste your service_role key here (NOT the anon key)
-const SERVICE_ROLE_KEY = 'PASTE_SERVICE_ROLE_KEY_HERE';
+const flags = parseArgs(process.argv.slice(2));
 
-const EMAIL = 'admin@sms.com';
-const PASSWORD = 'Admin@123456';
-const USER_ID = '949abb5d-5bd2-4902-bb16-327240e0d36a';
+const SUPABASE_URL = flags.url;
+const SERVICE_ROLE_KEY = flags.key;
+const EMAIL = flags.email;
+const PASSWORD = flags.password;
 
-if (SERVICE_ROLE_KEY === 'PASTE_SERVICE_ROLE_KEY_HERE') {
-  console.error('❌ Please paste your service_role key in the script first!');
-  console.error('   Get it from: https://supabase.com/dashboard/project/jqilueudbhgcgskvkvhe/settings/api');
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !EMAIL || !PASSWORD) {
+  console.error('Usage: node create-admin.mjs --email=<email> --password=<password> --url=<supabase_url> --key=<service_role_key>');
   process.exit(1);
 }
 
 async function createAdminUser() {
-  console.log('🚀 Creating admin user...');
+  console.log('Creating admin user...');
 
-  // Try to create user via Admin API
   const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
     method: 'POST',
     headers: {
@@ -35,7 +44,6 @@ async function createAdminUser() {
       email: EMAIL,
       password: PASSWORD,
       email_confirm: true,
-      id: USER_ID,
       user_metadata: { full_name: 'Admin' },
     }),
   });
@@ -43,73 +51,38 @@ async function createAdminUser() {
   const data = await res.json();
 
   if (!res.ok) {
-    // If user already exists, try to update password
     if (data.code === 'email_exists' || res.status === 422) {
-      console.log('⚠️  User already exists. Updating password...');
-      return await updateUserPassword();
+      console.log('User already exists. Updating password...');
+      return await updateUserPassword(data.id);
     }
-    console.error('❌ Failed to create user:', JSON.stringify(data, null, 2));
+    console.error('Failed to create user:', JSON.stringify(data, null, 2));
     process.exit(1);
   }
 
-  console.log('✅ User created successfully!');
-  console.log('   ID:', data.id);
-  console.log('   Email:', data.email);
-  console.log('   Confirmed:', data.email_confirmed_at ? 'Yes' : 'No');
-  console.log('');
-  console.log('🔑 Login with:');
-  console.log('   Email:    ', EMAIL);
-  console.log('   Password: ', PASSWORD);
+  console.log('User created successfully!');
+  console.log('  ID:', data.id);
+  console.log('  Email:', data.email);
 }
 
-async function updateUserPassword() {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${USER_ID}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-      'apikey': SERVICE_ROLE_KEY,
-    },
-    body: JSON.stringify({
-      password: PASSWORD,
-      email_confirm: true,
-    }),
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    // If we don't know the ID, list all users and find by email
-    console.log('   Searching for user by email...');
-    return await findAndUpdateUser();
+async function updateUserPassword(userId) {
+  if (!userId) {
+    console.log('Searching for user by email...');
+    const listRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=50`, {
+      headers: {
+        'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+        'apikey': SERVICE_ROLE_KEY,
+      },
+    });
+    const listData = await listRes.json();
+    const existing = (listData.users || []).find(u => u.email === EMAIL);
+    if (!existing) {
+      console.error('User not found.');
+      process.exit(1);
+    }
+    userId = existing.id;
   }
 
-  console.log('✅ Password updated successfully!');
-  console.log('🔑 Login with:');
-  console.log('   Email:    ', EMAIL);
-  console.log('   Password: ', PASSWORD);
-}
-
-async function findAndUpdateUser() {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=50`, {
-    headers: {
-      'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-      'apikey': SERVICE_ROLE_KEY,
-    },
-  });
-
-  const data = await res.json();
-  const users = data.users || [];
-  const existing = users.find(u => u.email === EMAIL);
-
-  if (!existing) {
-    console.error('❌ User not found. Something is wrong.');
-    process.exit(1);
-  }
-
-  console.log('   Found user ID:', existing.id);
-
-  const updateRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${existing.id}`, {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -119,19 +92,16 @@ async function findAndUpdateUser() {
     body: JSON.stringify({ password: PASSWORD, email_confirm: true }),
   });
 
-  const updateData = await updateRes.json();
-  if (!updateRes.ok) {
-    console.error('❌ Failed to update user:', JSON.stringify(updateData, null, 2));
+  const data = await res.json();
+  if (!res.ok) {
+    console.error('Failed to update password:', JSON.stringify(data, null, 2));
     process.exit(1);
   }
 
-  console.log('✅ User password updated and email confirmed!');
-  console.log('🔑 Login with:');
-  console.log('   Email:    ', EMAIL);
-  console.log('   Password: ', PASSWORD);
+  console.log('Password updated successfully!');
 }
 
 createAdminUser().catch(err => {
-  console.error('❌ Unexpected error:', err.message);
+  console.error('Unexpected error:', err.message);
   process.exit(1);
 });

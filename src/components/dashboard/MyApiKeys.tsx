@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Key, Plus, Trash2, Eye, EyeOff, Copy } from 'lucide-react';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface ApiKey {
   id: string;
@@ -22,6 +23,8 @@ export function MyApiKeys() {
   const [showKey, setShowKey] = useState<string | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     fetchKeys();
@@ -43,10 +46,12 @@ export function MyApiKeys() {
   };
 
   const generateApiKey = (): string => {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = 'hloov_';
     for (let i = 0; i < 32; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars[array[i] % chars.length];
     }
     return result;
   };
@@ -76,13 +81,14 @@ export function MyApiKeys() {
     setIsCreating(false);
   };
 
-  const handleDeleteKey = async (keyId: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المفتاح؟')) return;
+  const handleDeleteKey = async () => {
+    if (!deleteTarget) return;
+    setDeleteConfirmOpen(false);
 
     const { error } = await supabase
       .from('api_keys')
       .delete()
-      .eq('id', keyId);
+      .eq('id', deleteTarget);
 
     if (error) {
       toast.error('فشل حذف المفتاح');
@@ -90,6 +96,7 @@ export function MyApiKeys() {
       toast.success('تم حذف المفتاح');
       fetchKeys();
     }
+    setDeleteTarget(null);
   };
 
   const handleToggleActive = async (keyId: string, currentStatus: boolean) => {
@@ -105,9 +112,25 @@ export function MyApiKeys() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success('تم النسخ');
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('تم النسخ');
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        toast.success('تم النسخ');
+      } catch {
+        toast.error('فشل نسخ المفتاح');
+      }
+      document.body.removeChild(textarea);
+    }
   };
 
   const maskKey = (key: string) => {
@@ -124,6 +147,7 @@ export function MyApiKeys() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -217,7 +241,7 @@ export function MyApiKeys() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteKey(key.id)}
+                      onClick={() => { setDeleteTarget(key.id); setDeleteConfirmOpen(true); }}
                       className="text-red-600 hover:text-red-700"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -230,5 +254,13 @@ export function MyApiKeys() {
         </CardContent>
       </Card>
     </div>
+    <ConfirmDialog
+      open={deleteConfirmOpen}
+      onOpenChange={setDeleteConfirmOpen}
+      title="حذف المفتاح"
+      description="هل أنت متأكد من حذف هذا المفتاح؟"
+      onConfirm={handleDeleteKey}
+    />
+    </>
   );
 }

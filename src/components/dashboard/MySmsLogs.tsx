@@ -9,11 +9,19 @@ import NewSendDialog from './NewSendDialog';
 
 interface SmsLog {
   id: string;
+<<<<<<< HEAD
   recipients_count: number;
   message_template: string | null;
   status: string;
   created_at: string;
   api_keys?: { user_id?: string } | null;
+=======
+  message_template: string | null;
+  recipients_count: number;
+  status: string;
+  created_at: string;
+  api_key_id: string | null;
+>>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
 }
 
 export function MySmsLogs() {
@@ -123,7 +131,11 @@ export function MySmsLogs() {
                   <thead>
                     <tr className="border-b">
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">عدد المستلمين</th>
+<<<<<<< HEAD
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">الرسالة</th>
+=======
+                      <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">قالب الرسالة</th>
+>>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">الحالة</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">التاريخ</th>
                     </tr>
@@ -132,7 +144,13 @@ export function MySmsLogs() {
                     {logs.map((log) => (
                       <tr key={log.id} className="border-b hover:bg-gray-50">
                         <td className="py-3 px-4 font-mono text-sm">{log.recipients_count}</td>
+<<<<<<< HEAD
                         <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{log.message_template || '—'}</td>
+=======
+                        <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate" title={log.message_template || ''}>
+                          {log.message_template || '-'}
+                        </td>
+>>>>>>> 63ab088 (إصلاحات شاملة: 62 مشكلة - أمان، أداء، تجربة مستخدم، وجاهزية الإنتاج)
                         <td className="py-3 px-4">{getStatusBadge(log.status)}</td>
                         <td className="py-3 px-4 text-sm text-gray-500">
                           {new Date(log.created_at).toLocaleDateString('ar-EG')}

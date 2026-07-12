@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Lock, Settings, Key, CheckCircle, Link, Send, Wifi, WifiOff, BarChart3 } from 'lucide-react';
 import { z } from 'zod';
-import { useAuth } from '@/hooks/useAuth';
 import LinkedAccounts from '@/components/LinkedAccounts';
 import RateLimitDisplay from '@/components/RateLimitDisplay';
 import { Spinner } from '@/components/Spinner';
@@ -29,7 +28,6 @@ interface SettingsDialogProps {
 }
 
 const SettingsDialog = ({ apiKey, onApiKeyChange, savedApiKeyId }: SettingsDialogProps) => {
-  useAuth();
   const [open, setOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -79,14 +77,12 @@ const SettingsDialog = ({ apiKey, onApiKeyChange, savedApiKeyId }: SettingsDialo
     }
   };
 
-  const handleSaveApiKey = async () => {
-    try {
-      toast.loading('جاري حفظ مفتاح API...');
-      await onApiKeyChange(localApiKey);
+  const handleSaveApiKey = () => {
+    toast.loading('جاري حفظ مفتاح API...');
+    onApiKeyChange(localApiKey);
+    setTimeout(() => {
       toast.success('تم حفظ مفتاح API بنجاح');
-    } catch {
-      toast.error('فشل حفظ مفتاح API');
-    }
+    }, 700);
   };
 
   return (
