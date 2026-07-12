@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 interface ApiKey {
   id: string;
   api_key: string;
-  name: string;
+  key_name: string;
   is_active: boolean;
   created_at: string;
 }
@@ -62,7 +62,7 @@ export function MyApiKeys() {
       .insert({
         user_id: user.id,
         api_key: newKey,
-        name: newKeyName.trim(),
+        key_name: newKeyName.trim(),
         is_active: true,
       });
 
@@ -180,7 +180,7 @@ export function MyApiKeys() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-gray-900">{key.name}</h3>
+                      <h3 className="font-medium text-gray-900">{key.key_name}</h3>
                       <Badge variant={key.is_active ? 'default' : 'secondary'}>
                         {key.is_active ? 'نشط' : 'معطل'}
                       </Badge>

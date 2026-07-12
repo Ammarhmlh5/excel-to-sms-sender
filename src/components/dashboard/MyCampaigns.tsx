@@ -13,7 +13,8 @@ interface Campaign {
   contacts_count: number;
   sent_count: number;
   failed_count: number;
-  created_at: string;
+  source?: string | null;
+  created_at: string | null;
 }
 
 export function MyCampaigns() {
@@ -173,7 +174,7 @@ export function MyCampaigns() {
                     </div>
                   </div>
                   <div className="text-left text-sm text-gray-500">
-                    {new Date(campaign.created_at).toLocaleDateString('ar-EG')}
+                    {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString('ar-EG') : ''}
                   </div>
                   <button
                     onClick={() => handleViewDetail(campaign)}
