@@ -1,4 +1,5 @@
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
   const d = new Date(dateStr);
   return d.toLocaleDateString('ar-EG', {
     month: 'short',
@@ -8,7 +9,8 @@ export function formatDate(dateStr: string): string {
   });
 }
 
-export function formatDateFull(dateStr: string): string {
+export function formatDateFull(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
   const d = new Date(dateStr);
   return d.toLocaleDateString('ar-EG', {
     year: 'numeric',
@@ -19,7 +21,8 @@ export function formatDateFull(dateStr: string): string {
   });
 }
 
-export function formatDateShort(dateStr: string): string {
+export function formatDateShort(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
   const d = new Date(dateStr);
   return d.toLocaleDateString('ar-EG');
 }

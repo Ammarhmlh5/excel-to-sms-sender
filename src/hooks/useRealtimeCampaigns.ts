@@ -10,7 +10,7 @@ interface Campaign {
   sent_count: number;
   failed_count: number;
   source: string | null;
-  created_at: string;
+  created_at: string | null;
 }
 
 export function useRealtimeCampaigns() {

@@ -99,15 +99,6 @@ const Auth = () => {
         
         toast.success('تم تسجيل الدخول بنجاح');
       } else {
-        const { data: emailExists } = await supabase
-          .rpc('check_email_exists', { p_email: email });
-
-        if (emailExists) {
-          toast.error('هذا البريد الإلكتروني مسجّل بالفعل. سجّل دخولك أو استخدم بريداً آخر');
-          setLoading(false);
-          return;
-        }
-
         const redirectUrl = `${window.location.origin}/`;
         
         const { data, error } = await supabase.auth.signUp({

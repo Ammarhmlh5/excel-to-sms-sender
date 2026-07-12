@@ -6,7 +6,7 @@ export interface CampaignMessage {
   status: string;
   error: string | null;
   sent_at: string | null;
-  created_at: string;
+  created_at: string | null;
 }
 
 export interface CampaignInfo {
@@ -16,8 +16,8 @@ export interface CampaignInfo {
   contacts_count: number;
   sent_count: number;
   failed_count: number;
-  source: string | null;
-  created_at: string;
+  source?: string | null;
+  created_at: string | null;
 }
 
 export const CAMPAIGN_MESSAGE_FIELDS = 'id, phone, name, message, status, error, sent_at, created_at' as const;

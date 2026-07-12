@@ -13,7 +13,7 @@ import { formatDateShort } from '@/lib/formatDate';
 import CampaignDetail from '@/components/CampaignDetail';
 import Pagination from '@/components/Pagination';
 
-const sourceLabel = (s: string | null) => {
+const sourceLabel = (s: string | null | undefined) => {
   if (s === 'excel_upload') return 'رفع Excel';
   if (s === 'mobile') return 'تطبيق موبايل';
   if (s === 'api') return 'API';

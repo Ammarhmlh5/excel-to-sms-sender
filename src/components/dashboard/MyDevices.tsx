@@ -9,12 +9,12 @@ import { toast } from 'sonner';
 interface Device {
   id: string;
   device_id: string;
-  platform: string;
-  device_name: string;
-  app_version: string;
-  is_active: boolean;
-  last_seen: string;
-  created_at: string;
+  platform: string | null;
+  device_name: string | null;
+  app_version: string | null;
+  is_active: boolean | null;
+  last_seen_at: string | null;
+  created_at: string | null;
 }
 
 export function MyDevices() {
@@ -57,15 +57,15 @@ export function MyDevices() {
     }
   };
 
-  const getPlatformIcon = (platform: string) => {
+  const getPlatformIcon = (platform: string | null) => {
     return platform === 'android' ? '🤖' : '🍎';
   };
 
-  const getStatusBadge = (isActive: boolean, lastSeen: string) => {
-    const lastSeenDate = new Date(lastSeen);
+  const getStatusBadge = (isActive: boolean | null, lastSeen: string | null) => {
+    const lastSeenDate = new Date(lastSeen || 0);
     const now = new Date();
     const diffHours = (now.getTime() - lastSeenDate.getTime()) / (1000 * 60 * 60);
-    const isOnline = diffHours < 24;
+    const isOnline = !!lastSeen && diffHours < 24;
 
     if (!isActive) {
       return <Badge variant="secondary"><XCircle className="w-3 h-3 ml-1" /> معطل</Badge>;
@@ -120,7 +120,7 @@ export function MyDevices() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-medium text-gray-900">{device.device_name || device.device_id}</h3>
-                      {getStatusBadge(device.is_active, device.last_seen)}
+                      {getStatusBadge(device.is_active, device.last_seen_at)}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <span className="capitalize">{device.platform}</span>
@@ -128,10 +128,10 @@ export function MyDevices() {
                     </div>
                     <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
                       <span>
-                        آخر اتصال: {new Date(device.last_seen).toLocaleString('ar-EG')}
+                        آخر اتصال: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString('ar-EG') : '—'}
                       </span>
                       <span>
-                        مسجل منذ: {new Date(device.created_at).toLocaleDateString('ar-EG')}
+                        مسجل منذ: {device.created_at ? new Date(device.created_at).toLocaleDateString('ar-EG') : '—'}
                       </span>
                     </div>
                   </div>

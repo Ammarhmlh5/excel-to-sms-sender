@@ -7,12 +7,11 @@ import { FileText, CheckCircle, XCircle } from 'lucide-react';
 
 interface SmsLog {
   id: string;
-  phone: string;
-  message: string;
+  recipients_count: number;
+  message_template: string | null;
   status: string;
-  sent_at: string;
   created_at: string;
-  api_keys?: { api_key: string } | null;
+  api_keys?: { user_id?: string } | null;
 }
 
 export function MySmsLogs() {
@@ -114,7 +113,7 @@ export function MySmsLogs() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">رقم الهاتف</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">عدد المستلمين</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">الرسالة</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">الحالة</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">التاريخ</th>
@@ -123,8 +122,8 @@ export function MySmsLogs() {
                   <tbody>
                     {logs.map((log) => (
                       <tr key={log.id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4 font-mono text-sm">{log.phone}</td>
-                        <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{log.message}</td>
+                        <td className="py-3 px-4 font-mono text-sm">{log.recipients_count}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{log.message_template || '—'}</td>
                         <td className="py-3 px-4">{getStatusBadge(log.status)}</td>
                         <td className="py-3 px-4 text-sm text-gray-500">
                           {new Date(log.created_at).toLocaleDateString('ar-EG')}
