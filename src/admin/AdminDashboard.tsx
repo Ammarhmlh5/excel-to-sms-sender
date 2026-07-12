@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Users, MessageSquare, KeyRound, Shield,
@@ -16,6 +17,7 @@ interface Stats {
 }
 
 const AdminDashboard = () => {
+  const { toast } = useToast();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -27,14 +29,16 @@ const AdminDashboard = () => {
         });
         if (!error && data) {
           setStats(data);
+        } else {
+          toast({ title: 'خطأ', description: error?.message || 'فشل في جلب الإحصائيات', variant: 'destructive' });
         }
       } catch {
-        // silent
+        toast({ title: 'خطأ', description: 'فشل في جلب الإحصائيات', variant: 'destructive' });
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [toast]);
 
   const cards = [
     { label: 'المستخدمون', value: stats?.users ?? 0, icon: Users, color: 'text-blue-500' },

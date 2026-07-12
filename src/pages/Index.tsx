@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
-import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut, Link as LinkIcon, Settings } from 'lucide-react';
+import { MessageCircle, Zap, Shield, CheckCircle, AlertCircle, LogOut, Link as LinkIcon, Settings, Mail, MessageSquare } from 'lucide-react';
 import SettingsDialog from '@/components/SettingsDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,7 +14,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import SendButton from '@/components/SendButton';
 import SendHistory from '@/components/SendHistory';
-import ColumnMapper, { ColumnMapping, autoDetectColumns } from '@/components/ColumnMapper';
+import ColumnMapper from '@/components/ColumnMapper';
+import { ColumnMapping, autoDetectColumns } from '@/lib/columnDetection';
 interface Contact {
   name: string;
   phone: string;
@@ -50,6 +51,7 @@ const Index = () => {
   const [linkingPlatform, setLinkingPlatform] = useState<string | null>(null);
   const [linkResult, setLinkResult] = useState<{ success: boolean; platform: string; linked: boolean } | null>(null);
   const [campaignName, setCampaignName] = useState('');
+  const [sendMode, setSendMode] = useState<'sms' | 'email'>('email');
 
   // Handle redirect from Hudhud platform via ?token=
   useEffect(() => {
@@ -101,25 +103,30 @@ const Index = () => {
     loadApiKey();
   }, [user]);
 
-  // Save API key to database when changed
-  const handleApiKeyChange = async (newKey: string) => {
+  // Save API key to database when changed (debounced)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleApiKeyChange = (newKey: string) => {
     setApiKey(newKey);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (!user || !newKey.trim()) return;
-    if (savedApiKeyId) {
-      await supabase.from('api_keys').update({
-        api_key: newKey
-      }).eq('id', savedApiKeyId);
-    } else {
-      const { data } = await supabase.from('api_keys').insert({
-        user_id: user.id,
-        api_key: newKey,
-        key_name: 'Hudhud API Key'
-      }).select('id').single();
-      if (data) {
-        setSavedApiKeyId(data.id);
+    saveTimerRef.current = setTimeout(async () => {
+      if (savedApiKeyId) {
+        await supabase.from('api_keys').update({ api_key: newKey }).eq('id', savedApiKeyId);
+      } else {
+        const { data } = await supabase.from('api_keys').insert({
+          user_id: user.id,
+          api_key: newKey,
+          key_name: 'Hudhud API Key'
+        }).select('id').single();
+        if (data) setSavedApiKeyId(data.id);
       }
-    }
+    }, 600);
   };
+
+  useEffect(() => {
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, []);
   // Phone number validation
   const validatePhoneNumber = useCallback((phone: string): { valid: boolean; cleaned: string; error?: string } => {
     if (!phone) {
@@ -261,6 +268,7 @@ const Index = () => {
     try {
       const messages = contacts.map(contact => ({
         to: contact.phone,
+        name: contact.name || undefined,
         message: contact.customMessage || defaultMessage
       })).filter(msg => msg.message.trim() !== '');
 
@@ -282,8 +290,26 @@ const Index = () => {
         });
       }
 
-      const { data, error } = await supabase.functions.invoke('send-sms', {
-        body: { messages, campaign_name: campaignName.trim() || undefined }
+      if (messages.length > 1000) {
+        toast({
+          title: `تم تجاوز الحد الأقصى (${messages.length} رسالة)`,
+          description: 'الحد الأقصى هو 1000 رسالة في الإرسال الواحد — سيتم إرسال أول 1000 رسالة فقط',
+          variant: 'destructive',
+        });
+      }
+
+      const cappedMessages = messages.slice(0, 1000);
+
+      const endpoint = sendMode === 'email' ? 'send-email' : 'send-sms';
+      const payload = sendMode === 'email'
+        ? {
+            messages: cappedMessages.map(m => ({ phone: m.to, name: m.name, message: m.message })),
+            campaign_name: campaignName.trim() || undefined,
+          }
+        : { messages: cappedMessages, campaign_name: campaignName.trim() || undefined };
+
+      const { data, error } = await supabase.functions.invoke(endpoint, {
+        body: payload,
       });
 
       if (error) {
@@ -296,7 +322,7 @@ const Index = () => {
 
       toast({
         title: "تم الإرسال بنجاح",
-        description: data?.message || `تم إرسال ${contacts.length} رسالة بنجاح`
+        description: data?.message || `تم إرسال ${Math.min(cappedMessages.length, 1000)} رسالة بنجاح`
       });
 
       if (data?.skippedCount > 0) {
@@ -339,9 +365,15 @@ const Index = () => {
               <span className="text-sm text-muted-foreground hidden sm:block">
                 {user?.email}
               </span>
+              <Link to="/dashboard">
+                <Button variant="default" size="sm" className="gap-2">
+                  <Settings className="w-4 h-4" />
+                  لوحة تحكمي
+                </Button>
+              </Link>
               {isAdmin && (
-                <Link to="/admin">
-                  <Button variant="default" size="sm" className="gap-2">
+                <Link to="/super-admin">
+                  <Button variant="secondary" size="sm" className="gap-2">
                     <Settings className="w-4 h-4" />
                     لوحة المشرف
                   </Button>
@@ -467,7 +499,7 @@ const Index = () => {
             <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
               <div className="flex items-center gap-3 mb-4">
                 <span className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm">
-                  3
+                  2
                 </span>
                 <h2 className="text-xl font-semibold text-foreground">الرسالة</h2>
               </div>
@@ -494,19 +526,64 @@ const Index = () => {
             </div>
           )}
 
+          {/* Send Mode Toggle */}
+          {contacts.length > 0 && (
+            <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm">
+                  3
+                </span>
+                <h2 className="text-xl font-semibold text-foreground">طريقة الإرسال</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setSendMode('email')}
+                  className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
+                    sendMode === 'email'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  <Mail className="w-5 h-5" />
+                  <div className="text-right">
+                    <p className="font-medium">إرسال عبر البريد</p>
+                    <p className="text-xs opacity-70">سيصل JSON إلى بريدك الإلكتروني</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setSendMode('sms')}
+                  className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
+                    sendMode === 'sms'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  <MessageSquare className="w-5 h-5" />
+                  <div className="text-right">
+                    <p className="font-medium">إرسال SMS مباشر</p>
+                    <p className="text-xs opacity-70">إرسال مباشر عبر Hudhud API</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Send Button */}
           <div className="animate-fade-in" style={{
           animationDelay: '200ms'
         }}>
-            <SendButton onClick={handleSend} disabled={!canSend} isLoading={isLoading} contactCount={contacts.length} />
+            <SendButton
+              onClick={handleSend}
+              disabled={!canSend}
+              isLoading={isLoading}
+              contactCount={contacts.length}
+              sendMode={sendMode}
+            />
           </div>
 
           {/* Send History */}
           <div className="bg-card p-6 rounded-xl shadow-card animate-fade-in">
             <div className="flex items-center gap-3 mb-4">
-              <span className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm">
-                4
-              </span>
               <h2 className="text-xl font-semibold text-foreground">سجل الإرسال</h2>
             </div>
             <SendHistory />

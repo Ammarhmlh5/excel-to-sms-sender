@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import Pagination from '@/components/Pagination';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { MessageStatusBadge } from '@/components/StatusBadges';
+import { formatDate } from '@/lib/formatDate';
 
 interface LogEntry {
   id: string;
@@ -18,56 +19,38 @@ interface LogEntry {
   message_template: string | null;
 }
 
-const statusBadge = (status: string) => {
-  const m: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    sent: 'default',
-    pending: 'outline',
-    failed: 'destructive',
-  };
-  const labels: Record<string, string> = {
-    sent: 'مرسلة',
-    pending: 'قيد الانتظار',
-    failed: 'فاشلة',
-  };
-  return <Badge variant={m[status] || 'outline'}>{labels[status] || status}</Badge>;
-};
-
 const PAGE_SIZE = 25;
 
 const SmsLogsView = () => {
+  const { toast } = useToast();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        let countQuery = supabase.from('sms_logs').select('*', { count: 'exact', head: true });
-        let dataQuery = supabase.from('sms_logs').select('*');
-
-        if (statusFilter !== 'all') {
-          countQuery = countQuery.eq('status', statusFilter);
-          dataQuery = dataQuery.eq('status', statusFilter);
-        }
-
-        const offset = (page - 1) * PAGE_SIZE;
-        const [{ count }, { data }] = await Promise.all([
-          countQuery,
-          dataQuery.order('created_at', { ascending: false }).range(offset, offset + PAGE_SIZE - 1),
-        ]);
-
-        if (data) setLogs(data);
-        if (count !== null) setTotal(count);
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
+  const fetchLogs = useCallback(async (p: number, status: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-manage-users', {
+        body: { action: 'list_sms_logs', page: p, limit: PAGE_SIZE, status },
+      });
+      if (!error && data) {
+        setLogs(data.logs);
+        setTotal(data.total);
+      } else {
+        toast({ title: 'خطأ', description: error?.message || 'فشل في جلب السجلات', variant: 'destructive' });
       }
-    })();
-  }, [page, statusFilter]);
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في جلب السجلات', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchLogs(page, statusFilter);
+  }, [page, statusFilter, fetchLogs]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -123,11 +106,11 @@ const SmsLogsView = () => {
                 logs.map((l) => (
                   <TableRow key={l.id}>
                     <TableCell className="font-medium">{l.recipients_count}</TableCell>
-                    <TableCell>{statusBadge(l.status)}</TableCell>
+                    <TableCell><MessageStatusBadge status={l.status} /></TableCell>
                     <TableCell className="max-w-[300px] truncate text-muted-foreground text-xs">
                       {l.message_template || '—'}
                     </TableCell>
-                    <TableCell>{new Date(l.created_at).toLocaleString('ar-EG')}</TableCell>
+                    <TableCell>{formatDate(l.created_at)}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -136,19 +119,7 @@ const SmsLogsView = () => {
         </CardContent>
       </Card>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-            <ChevronRight className="w-4 h-4 ml-1" />
-            السابق
-          </Button>
-          <span className="text-sm text-muted-foreground px-3">الصفحة {page} من {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-            التالي
-            <ChevronLeft className="w-4 h-4 mr-1" />
-          </Button>
-        </div>
-      )}
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
   );
 };

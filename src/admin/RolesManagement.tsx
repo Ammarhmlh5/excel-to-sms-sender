@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Eye, Shield, ShieldOff } from 'lucide-react';
+import Pagination from '@/components/Pagination';
+import { toggleAdminRole } from '@/lib/adminActions';
+import { Spinner } from '@/components/Spinner';
+import { RoleBadge } from '@/components/StatusBadges';
 
 interface UserWithRoles {
   user_id: string;
@@ -16,18 +19,22 @@ interface UserWithRoles {
   roles: string[];
 }
 
+const PAGE_SIZE = 25;
+
 const RolesManagement = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (p: number) => {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('admin-manage-users', {
-        body: { action: 'list_users', page: 1, search: '', limit: 100 },
+        body: { action: 'list_users', page: p, search: '', limit: PAGE_SIZE },
       });
       if (!error && data) {
         const mapped: UserWithRoles[] = (data.users || []).map((u: { user_id: string; full_name: string | null; user_roles?: { role: string }[] }) => ({
@@ -36,6 +43,7 @@ const RolesManagement = () => {
           roles: (u.user_roles || []).map((r: { role: string }) => r.role),
         }));
         setUsers(mapped);
+        setTotal(data.total || 0);
       }
     } catch {
       toast({ title: 'خطأ', description: 'فشل في جلب البيانات', variant: 'destructive' });
@@ -45,26 +53,15 @@ const RolesManagement = () => {
   }, [toast]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchData(page);
+  }, [page, fetchData]);
 
-  const toggleAdmin = async (userId: string, isAdmin: boolean) => {
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const handleToggleAdmin = async (userId: string, isAdmin: boolean) => {
     setActionLoading(userId);
-    try {
-      const { error } = await supabase.functions.invoke('admin-manage-users', {
-        body: { action: 'set_role', user_id: userId, role: isAdmin ? 'user' : 'admin' },
-      });
-      if (error) {
-        toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-      } else {
-        toast({ title: 'تم', description: isAdmin ? 'تم إزالة صلاحية المشرف' : 'تم منح صلاحية المشرف' });
-        fetchData();
-      }
-    } catch {
-      toast({ title: 'خطأ', description: 'فشلت العملية', variant: 'destructive' });
-    } finally {
-      setActionLoading(null);
-    }
+    await toggleAdminRole(userId, isAdmin, () => fetchData(page));
+    setActionLoading(null);
   };
 
   return (
@@ -78,7 +75,7 @@ const RolesManagement = () => {
         <CardHeader>
           <CardTitle className="text-lg">
             المستخدمون والصلاحيات
-            <span className="text-muted-foreground text-sm mr-2">({users.length})</span>
+            <span className="text-muted-foreground text-sm mr-2">({total})</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -106,10 +103,7 @@ const RolesManagement = () => {
                     <TableRow key={u.user_id}>
                       <TableCell className="font-medium">{u.full_name || '—'}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          {isAdmin && <Badge variant="default">مشرف</Badge>}
-                          {!isAdmin && <Badge variant="outline">مستخدم</Badge>}
-                        </div>
+                        <RoleBadge isAdmin={isAdmin} />
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2 justify-end">
@@ -125,10 +119,10 @@ const RolesManagement = () => {
                             variant={isAdmin ? 'destructive' : 'outline'}
                             size="sm"
                             disabled={actionLoading === u.user_id}
-                            onClick={() => toggleAdmin(u.user_id, isAdmin)}
+                            onClick={() => handleToggleAdmin(u.user_id, isAdmin)}
                           >
                             {actionLoading === u.user_id ? (
-                              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin ml-1" />
+                              <Spinner size="sm" className="ml-1" />
                             ) : isAdmin ? (
                               <ShieldOff className="w-4 h-4 ml-1" />
                             ) : (
@@ -146,6 +140,8 @@ const RolesManagement = () => {
           </Table>
         </CardContent>
       </Card>
+
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
   );
 };

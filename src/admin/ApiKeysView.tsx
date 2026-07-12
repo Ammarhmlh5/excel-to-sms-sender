@@ -2,13 +2,16 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Pagination from '@/components/Pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { ToggleLeft, ToggleRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Search } from 'lucide-react';
+import { formatDate } from '@/lib/formatDate';
+import { Spinner } from '@/components/Spinner';
 
 interface ApiKeyRow {
   id: string;
@@ -32,29 +35,22 @@ const ApiKeysView = () => {
 
   const fetchKeys = useCallback(async (p: number, s: string) => {
     setLoading(true);
-    const offset = (p - 1) * PAGE_SIZE;
-
-    let countQuery = supabase
-      .from('api_keys')
-      .select('*', { count: 'exact', head: true });
-
-    let dataQuery = supabase
-      .from('api_keys')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1);
-
-    if (s) {
-      const filter = `key_name.ilike.%${s}%,api_key.ilike.%${s}%`;
-      countQuery = countQuery.or(filter);
-      dataQuery = dataQuery.or(filter);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-manage-users', {
+        body: { action: 'list_api_keys', page: p, search: s, limit: PAGE_SIZE },
+      });
+      if (!error && data) {
+        setKeys(data.keys);
+        setTotal(data.total);
+      } else {
+        toast({ title: 'خطأ', description: error?.message || 'فشل في جلب مفاتيح API', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في جلب مفاتيح API', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-
-    const [{ count }, { data }] = await Promise.all([countQuery, dataQuery]);
-    if (data) setKeys(data);
-    setTotal(count || 0);
-    setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     fetchKeys(page, search);
@@ -138,7 +134,7 @@ const ApiKeysView = () => {
                         {k.is_active ? 'نشط' : 'معطل'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{new Date(k.created_at).toLocaleDateString('ar-EG')}</TableCell>
+                    <TableCell>{formatDate(k.created_at)}</TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"
@@ -147,7 +143,7 @@ const ApiKeysView = () => {
                         onClick={() => toggleKey(k.id, k.is_active)}
                       >
                         {actionLoading === k.id ? (
-                          <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin ml-1" />
+                          <Spinner size="sm" className="ml-1" />
                         ) : k.is_active ? (
                           <ToggleRight className="w-4 h-4 ml-1" />
                         ) : (
@@ -162,33 +158,9 @@ const ApiKeysView = () => {
             </TableBody>
           </Table>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-              <span className="text-sm text-muted-foreground">
-                صفحة {page} من {totalPages}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
   );
 };

@@ -1,30 +1,16 @@
 import { useState } from 'react';
 import { useRealtimeCampaigns } from '@/hooks/useRealtimeCampaigns';
-import { CheckCircle, XCircle, Clock, Send, RefreshCw, Smartphone, Filter } from 'lucide-react';
-
-const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  completed: { label: 'مكتملة', icon: <CheckCircle className="w-4 h-4" />, color: 'text-primary' },
-  failed: { label: 'فشلت', icon: <XCircle className="w-4 h-4" />, color: 'text-destructive' },
-  sending: { label: 'جاري الإرسال', icon: <Send className="w-4 h-4 animate-pulse" />, color: 'text-accent' },
-  queued: { label: 'في الانتظار', icon: <Clock className="w-4 h-4" />, color: 'text-muted-foreground' },
-  draft: { label: 'مسودة', icon: <Clock className="w-4 h-4" />, color: 'text-muted-foreground' },
-  partially_completed: { label: 'مكتملة جزئياً', icon: <CheckCircle className="w-4 h-4" />, color: 'text-accent' },
-  cancelled: { label: 'ملغاة', icon: <XCircle className="w-4 h-4" />, color: 'text-muted-foreground' },
-};
+import { Send, RefreshCw, Smartphone, Filter } from 'lucide-react';
+import CampaignDetail from './CampaignDetail';
+import { CampaignStatusIcon, CampaignStatusLabel } from '@/components/StatusBadges';
+import { formatDate } from '@/lib/formatDate';
+import { Spinner } from '@/components/Spinner';
 
 const SendHistory = () => {
   const { campaigns, loading, refresh } = useRealtimeCampaigns();
   const [statusFilter, setStatusFilter] = useState<string>('all');
-
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('ar', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const [selectedCampaign, setSelectedCampaign] = useState<typeof campaigns[0] | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const filteredCampaigns = statusFilter === 'all'
     ? campaigns
@@ -38,7 +24,7 @@ const SendHistory = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" color="border-primary" />
       </div>
     );
   }
@@ -83,59 +69,67 @@ const SendHistory = () => {
         </div>
       ) : (
         filteredCampaigns.map((campaign) => {
-        const statusInfo = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.draft;
-        const progress = campaign.contacts_count > 0
-          ? Math.round((campaign.sent_count / campaign.contacts_count) * 100)
-          : 0;
+          const progress = campaign.contacts_count > 0
+            ? Math.round((campaign.sent_count / campaign.contacts_count) * 100)
+            : 0;
 
-        return (
-          <div
-            key={campaign.id}
-            className="flex items-center justify-between p-3 rounded-lg border border-border bg-secondary/30"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`${statusInfo.color} shrink-0`}>
-                {campaign.source === 'mobile' ? (
-                  <Smartphone className="w-4 h-4" />
-                ) : (
-                  statusInfo.icon
+          return (
+            <div
+              key={campaign.id}
+              className="flex items-center justify-between p-3 rounded-lg border border-border bg-secondary/30 cursor-pointer hover:bg-secondary/50 transition-colors"
+              onClick={() => { setSelectedCampaign(campaign); setDetailOpen(true); }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setSelectedCampaign(campaign); setDetailOpen(true); } }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="shrink-0">
+                  {campaign.source === 'mobile' ? (
+                    <Smartphone className="w-4 h-4" />
+                  ) : (
+                    <CampaignStatusIcon status={campaign.status} />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm truncate">{campaign.name}</span>
+                    <CampaignStatusLabel status={campaign.status} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {campaign.contacts_count} جهة اتصال • {formatDate(campaign.created_at)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-left shrink-0">
+                <div className="text-sm font-medium">
+                  {campaign.sent_count}/{campaign.contacts_count}
+                </div>
+                {campaign.failed_count > 0 && (
+                  <div className="text-xs text-destructive">
+                    {campaign.failed_count} فشل
+                  </div>
+                )}
+                {campaign.status === 'sending' && (
+                  <div className="w-16 h-1.5 bg-secondary rounded-full mt-1 overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-500"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
                 )}
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm truncate">{campaign.name}</span>
-                  <span className={`text-xs ${statusInfo.color}`}>
-                    {statusInfo.label}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {campaign.contacts_count} جهة اتصال • {formatDate(campaign.created_at)}
-                </p>
-              </div>
             </div>
-
-            <div className="text-left shrink-0">
-              <div className="text-sm font-medium">
-                {campaign.sent_count}/{campaign.contacts_count}
-              </div>
-              {campaign.failed_count > 0 && (
-                <div className="text-xs text-destructive">
-                  {campaign.failed_count} فشل
-                </div>
-              )}
-              {campaign.status === 'sending' && (
-                <div className="w-16 h-1.5 bg-secondary rounded-full mt-1 overflow-hidden">
-                  <div
-                    className="h-full bg-primary rounded-full transition-all duration-500"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })
+          );
+        })
       )}
+
+      <CampaignDetail
+        campaign={selectedCampaign}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onDelete={refresh}
+      />
     </div>
   );
 };

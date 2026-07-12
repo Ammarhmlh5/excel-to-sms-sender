@@ -1,0 +1,282 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCorsHeaders } from "../_shared/cors.ts";
+
+interface EmailMessage {
+  phone: string;
+  message: string;
+  name?: string;
+}
+
+interface RequestBody {
+  messages: EmailMessage[];
+  campaign_name?: string;
+}
+
+const RATE_LIMITS = {
+  MAX_MESSAGES_PER_REQUEST: 1000,
+  MAX_EMAIL_LENGTH: 1530,
+};
+
+function sanitize(text: string, maxLen: number): string {
+  // eslint-disable-next-line no-control-regex
+  const cleaned = text.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, "");
+  return cleaned.trim().substring(0, maxLen);
+}
+
+serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req.headers.get("Origin") || undefined);
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "غير مصرح - الرجاء تسجيل الدخول" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+
+    if (!resendApiKey) {
+      return new Response(
+        JSON.stringify({ error: "خدمة البريد الإلكتروني غير مُعدّة — الرجاء إضافة RESEND_API_KEY" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "غير مصرح - الرجاء تسجيل الدخول" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!user.email) {
+      return new Response(
+        JSON.stringify({ error: "لا يوجد بريد إلكتروني مرتبط بالحساب" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("full_name, company_name")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let body: RequestBody;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "طلب غير صالح - البيانات ليست JSON صحيح" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { messages, campaign_name } = body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "لا توجد رسائل للإرسال" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (messages.length > RATE_LIMITS.MAX_MESSAGES_PER_REQUEST) {
+      return new Response(
+        JSON.stringify({ error: `لا يمكن إرسال أكثر من ${RATE_LIMITS.MAX_MESSAGES_PER_REQUEST} رسالة في طلب واحد` }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate messages
+    const validMessages: EmailMessage[] = [];
+    let invalidCount = 0;
+
+    for (const msg of messages) {
+      const phone = msg.phone?.trim();
+      if (!phone) { invalidCount++; continue; }
+
+      // Validate phone: must be 9-15 digits
+      const cleaned = phone.replace(/[^\d]/g, '');
+      if (cleaned.length < 9 || cleaned.length > 15) { invalidCount++; continue; }
+
+      const msgSanitized = sanitize(msg.message || "", RATE_LIMITS.MAX_EMAIL_LENGTH);
+      if (!msgSanitized) { invalidCount++; continue; }
+
+      validMessages.push({ phone, message: msgSanitized, name: typeof msg.name === 'string' ? msg.name.trim().substring(0, 255) : undefined });
+    }
+
+    if (validMessages.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "لا توجد رسائل صالحة للإرسال" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Rate limit check
+    const { data: rateResult, error: rateError } = await adminClient.rpc('check_rate_limit_and_increment', {
+      p_user_id: user.id,
+      p_limit_hourly: 5000,
+      p_limit_daily: 10000,
+      p_messages_to_add: validMessages.length
+    });
+
+    if (rateError || !rateResult) {
+      return new Response(
+        JSON.stringify({ error: "تم تجاوز الحد المسموح للإرسال" }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // STEP 1: حفظ الحملة في قاعدة البيانات
+    const campaignName = campaign_name || `حملة بريد - ${validMessages.length} رسالة`;
+    const { data: newCampaign, error: campError } = await adminClient
+      .from("campaigns")
+      .insert({
+        user_id: user.id,
+        name: campaignName,
+        status: "sending",
+        contacts_count: validMessages.length,
+        source: "excel_upload",
+      })
+      .select("id")
+      .single();
+
+    if (campError || !newCampaign) {
+      return new Response(
+        JSON.stringify({ error: "فشل إنشاء الحملة في قاعدة البيانات" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const activeCampaignId = newCampaign.id;
+
+    // STEP 2: حفظ الرسائل في قاعدة البيانات
+    const campaignMessages = validMessages.map((msg) => ({
+      campaign_id: activeCampaignId,
+      phone: msg.phone,
+      name: msg.name || null,
+      message: msg.message,
+      status: "pending" as const,
+    }));
+
+    const { error: insertMsgsError } = await adminClient
+      .from("campaign_messages")
+      .insert(campaignMessages);
+
+    if (insertMsgsError) {
+      console.error("Failed to insert campaign messages:", insertMsgsError.message);
+    }
+
+    // STEP 3: إرسال البريد الإلكتروني عبر Resend
+    const senderName = profileData?.full_name || "مرسال الهدهد";
+    const companyName = profileData?.company_name;
+
+    const emailSubject = `${campaignName} (${validMessages.length} رسالة)`;
+
+    // بناء محتوى البريد
+    const messagesText = validMessages
+      .map((msg, i) => `${i + 1}. [${msg.phone}]${msg.name ? ` (${msg.name})` : ''}\n${msg.message}`)
+      .join("\n\n");
+
+    const emailBody = `مرحباً ${senderName}،
+
+${companyName ? `الشركة: ${companyName}\n` : ''}الحملة: ${campaignName}
+عدد الرسائل: ${validMessages.length}
+
+--- الرسائل ---
+
+${messagesText}
+
+---
+تم الإرسال عبر مرسال الهدهد`;
+
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "مرسال الهدهد <onboarding@resend.dev>",
+        to: [user.email],
+        subject: emailSubject,
+        text: emailBody,
+      }),
+    });
+
+    let resendResult: Record<string, unknown> = {};
+    try {
+      resendResult = await resendResponse.json();
+    } catch {
+      resendResult = { error: "invalid_json" };
+    }
+
+    const emailSuccess = resendResponse.ok && !resendResult.error;
+
+    // STEP 4: تحديث حالة الحملة والرسائل
+    const finalStatus = emailSuccess ? "completed" : "failed";
+    const msgStatus = emailSuccess ? "sent" : "failed";
+
+    await adminClient
+      .from("campaigns")
+      .update({
+        status: finalStatus,
+        sent_count: emailSuccess ? validMessages.length : 0,
+        failed_count: emailSuccess ? 0 : validMessages.length,
+      })
+      .eq("id", activeCampaignId);
+
+    await adminClient
+      .from("campaign_messages")
+      .update({
+        status: msgStatus,
+        sent_at: emailSuccess ? new Date().toISOString() : undefined,
+        error: emailSuccess ? undefined : (resendResult.message as string) || "فشل إرسال البريد",
+      })
+      .eq("campaign_id", activeCampaignId)
+      .eq("status", "pending");
+
+    if (!emailSuccess) {
+      return new Response(
+        JSON.stringify({
+          error: (resendResult.message as string) || "فشل إرسال البريد الإلكتروني",
+          campaign_id: activeCampaignId,
+        }),
+        { status: resendResponse.ok ? 400 : resendResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `تم إرسال ${validMessages.length} رسالة إلى بريدك الإلكتروني (${user.email})`,
+        sentCount: validMessages.length,
+        skippedCount: invalidCount,
+        campaign_id: activeCampaignId,
+        email_id: (resendResult as { id?: string }).id,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "حدث خطأ غير متوقع" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});

@@ -2,12 +2,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Phone, User, MessageSquare, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { ColumnMapping } from '@/lib/columnDetection';
 
-export interface ColumnMapping {
-  phone: string;
-  name: string;
-  message: string;
-}
 
 interface ColumnMapperProps {
   headers: string[];
@@ -15,46 +11,6 @@ interface ColumnMapperProps {
   onMappingChange: (mapping: ColumnMapping) => void;
   autoDetected: boolean;
 }
-
-const PHONE_PATTERNS = [
-  /phone/i, /mobile/i, /رقم/i, /هاتف/i, /جوال/i, /موبايل/i, /tel/i, /cell/i
-];
-
-const NAME_PATTERNS = [
-  /name/i, /اسم/i, /إسم/i, /مشترك/i, /عميل/i, /customer/i, /client/i
-];
-
-const MESSAGE_PATTERNS = [
-  /message/i, /sms/i, /رسالة/i, /نص/i, /text/i, /msg/i, /content/i
-];
-
-export const detectColumnType = (header: string): 'phone' | 'name' | 'message' | null => {
-  const normalizedHeader = header.toLowerCase().replace(/[_-]/g, '');
-  
-  if (PHONE_PATTERNS.some(pattern => pattern.test(normalizedHeader))) {
-    return 'phone';
-  }
-  if (NAME_PATTERNS.some(pattern => pattern.test(normalizedHeader))) {
-    return 'name';
-  }
-  if (MESSAGE_PATTERNS.some(pattern => pattern.test(normalizedHeader))) {
-    return 'message';
-  }
-  return null;
-};
-
-export const autoDetectColumns = (headers: string[]): ColumnMapping => {
-  const mapping: ColumnMapping = { phone: '', name: '', message: '' };
-  
-  headers.forEach((header) => {
-    const type = detectColumnType(header);
-    if (type && !mapping[type]) {
-      mapping[type] = header;
-    }
-  });
-  
-  return mapping;
-};
 
 const ColumnMapper = ({ headers, mapping, onMappingChange, autoDetected }: ColumnMapperProps) => {
   const handleChange = (field: keyof ColumnMapping, value: string) => {
@@ -67,7 +23,7 @@ const ColumnMapper = ({ headers, mapping, onMappingChange, autoDetected }: Colum
   const columns = [
     { key: 'phone' as const, label: 'رقم الهاتف', icon: Phone, required: true },
     { key: 'name' as const, label: 'اسم العميل', icon: User, required: false },
-    { key: 'message' as const, label: 'نص الرسالة', icon: MessageSquare, required: true },
+    { key: 'message' as const, label: 'نص الرسالة', icon: MessageSquare, required: false },
   ];
 
   return (
@@ -116,8 +72,8 @@ const ColumnMapper = ({ headers, mapping, onMappingChange, autoDetected }: Colum
         </p>
       )}
       {!mapping.message && (
-        <p className="text-sm text-destructive flex items-center gap-1">
-          ⚠️ يجب تحديد عمود نص الرسالة
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          💡 يمكنك تحديد عمود الرسالة أو كتابة رسالة افتراضية لاحقاً
         </p>
       )}
     </div>

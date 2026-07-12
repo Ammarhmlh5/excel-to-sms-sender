@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Lock, Eye, EyeOff, ArrowRight, CheckCircle } from 'lucide-react';
+import { Lock, ArrowRight, CheckCircle } from 'lucide-react';
+import { Spinner } from '@/components/Spinner';
+import { PasswordInput } from '@/components/PasswordInput';
 import { z } from 'zod';
 
 const passwordSchema = z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
@@ -14,8 +15,6 @@ const ResetPassword = () => {
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const navigateTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -108,7 +107,7 @@ const ResetPassword = () => {
     <div className="min-h-screen bg-background flex items-center justify-center p-4" dir="rtl">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2">📱 SMS Pro</h1>
+          <h1 className="text-4xl font-bold text-primary mb-2">مرسال الهدهد</h1>
           <p className="text-muted-foreground">منصة إرسال الرسائل النصية</p>
         </div>
 
@@ -127,28 +126,12 @@ const ResetPassword = () => {
                   <Lock className="w-4 h-4 text-primary" />
                   كلمة المرور الجديدة
                 </label>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="h-12 pl-12"
-                    dir="ltr"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 p-1 hover:bg-secondary rounded transition-colors"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5 text-muted-foreground" />
-                    ) : (
-                      <Eye className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </button>
-                </div>
+                <PasswordInput
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="••••••••"
+                  required
+                />
               </div>
 
               <div className="space-y-2">
@@ -156,28 +139,13 @@ const ResetPassword = () => {
                   <Lock className="w-4 h-4 text-primary" />
                   تأكيد كلمة المرور
                 </label>
-                <div className="relative">
-                  <Input
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="h-12 pl-12"
-                    dir="ltr"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 p-1 hover:bg-secondary rounded transition-colors"
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff className="w-5 h-5 text-muted-foreground" />
-                    ) : (
-                      <Eye className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </button>
-                </div>
+                <PasswordInput
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="new-password"
+                />
               </div>
 
               <Button
@@ -186,7 +154,7 @@ const ResetPassword = () => {
                 disabled={loading}
               >
                 {loading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <Spinner size="sm" color="border-white" />
                 ) : (
                   <>
                     تغيير كلمة المرور

@@ -1,13 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import Pagination from '@/components/Pagination';
 import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { formatDate } from '@/lib/formatDate';
 
 interface Device {
   id: string;
@@ -25,6 +27,7 @@ interface Device {
 const PAGE_SIZE = 30;
 
 const DevicesView = () => {
+  const { toast } = useToast();
   const [devices, setDevices] = useState<Device[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -33,29 +36,22 @@ const DevicesView = () => {
 
   const fetchDevices = useCallback(async (p: number, s: string) => {
     setLoading(true);
-    const offset = (p - 1) * PAGE_SIZE;
-
-    let countQuery = supabase
-      .from('device_push_tokens')
-      .select('*', { count: 'exact', head: true });
-
-    let dataQuery = supabase
-      .from('device_push_tokens')
-      .select('*')
-      .order('last_seen_at', { ascending: false, nullsLast: true })
-      .range(offset, offset + PAGE_SIZE - 1);
-
-    if (s) {
-      const filter = `device_name.ilike.%${s}%,device_id.ilike.%${s}%,platform.ilike.%${s}%`;
-      countQuery = countQuery.or(filter);
-      dataQuery = dataQuery.or(filter);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-manage-users', {
+        body: { action: 'list_devices', page: p, search: s, limit: PAGE_SIZE },
+      });
+      if (!error && data) {
+        setDevices(data.devices);
+        setTotal(data.total);
+      } else {
+        toast({ title: 'خطأ', description: error?.message || 'فشل في جلب الأجهزة', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في جلب الأجهزة', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-
-    const [{ count }, { data }] = await Promise.all([countQuery, dataQuery]);
-    if (data) setDevices(data);
-    setTotal(count || 0);
-    setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     fetchDevices(page, search);
@@ -125,42 +121,18 @@ const DevicesView = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {d.last_seen_at ? new Date(d.last_seen_at).toLocaleDateString('ar-EG') : '—'}
+                      {d.last_seen_at ? formatDate(d.last_seen_at) : '—'}
                     </TableCell>
-                    <TableCell>{new Date(d.created_at).toLocaleDateString('ar-EG')}</TableCell>
+                    <TableCell>{formatDate(d.created_at)}</TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-              <span className="text-sm text-muted-foreground">
-                صفحة {page} من {totalPages}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
   );
 };

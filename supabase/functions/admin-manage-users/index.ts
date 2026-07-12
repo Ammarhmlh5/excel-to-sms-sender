@@ -2,6 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
+function sanitizeSearch(input: string): string {
+  return input.replace(/[%_]/g, '\\$&');
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req.headers.get('Origin') || undefined);
   if (req.method === 'OPTIONS') {
@@ -70,7 +74,7 @@ serve(async (req) => {
 
       case 'list_users': {
         const page = Math.max(1, (body.page as number) || 1);
-        const search = (body.search as string) || '';
+        const search = sanitizeSearch((body.search as string) || '');
         const limit = Math.min(100, Math.max(1, (body.limit as number) || 20));
         const offset = (page - 1) * limit;
 
@@ -293,6 +297,128 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, message: 'تم حذف المستخدم وجميع بياناته' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'list_campaigns': {
+        const page = Math.max(1, (body.page as number) || 1);
+        const search = sanitizeSearch((body.search as string) || '');
+        const limit = Math.min(100, Math.max(1, (body.limit as number) || 20));
+        const offset = (page - 1) * limit;
+
+        let countQuery = adminClient
+          .from('campaigns')
+          .select('*', { count: 'exact', head: true });
+
+        let fetchQuery = adminClient
+          .from('campaigns')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (search) {
+          countQuery = countQuery.ilike('name', `%${search}%`);
+          fetchQuery = fetchQuery.ilike('name', `%${search}%`);
+        }
+
+        const [{ count }, { data, error }] = await Promise.all([countQuery, fetchQuery]);
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ campaigns: data || [], total: count || 0, page, limit }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'list_sms_logs': {
+        const page = Math.max(1, (body.page as number) || 1);
+        const limit = Math.min(100, Math.max(1, (body.limit as number) || 25));
+        const statusFilter = (body.status as string) || '';
+        const offset = (page - 1) * limit;
+
+        let countQuery = adminClient
+          .from('sms_logs')
+          .select('*', { count: 'exact', head: true });
+
+        let fetchQuery = adminClient
+          .from('sms_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (statusFilter && statusFilter !== 'all') {
+          countQuery = countQuery.eq('status', statusFilter);
+          fetchQuery = fetchQuery.eq('status', statusFilter);
+        }
+
+        const [{ count }, { data, error }] = await Promise.all([countQuery, fetchQuery]);
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ logs: data || [], total: count || 0, page, limit }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'list_api_keys': {
+        const page = Math.max(1, (body.page as number) || 1);
+        const search = sanitizeSearch((body.search as string) || '');
+        const limit = Math.min(100, Math.max(1, (body.limit as number) || 30));
+        const offset = (page - 1) * limit;
+
+        let countQuery = adminClient
+          .from('api_keys')
+          .select('*', { count: 'exact', head: true });
+
+        let fetchQuery = adminClient
+          .from('api_keys')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (search) {
+          const filter = `key_name.ilike.%${search}%,api_key.ilike.%${search}%`;
+          countQuery = countQuery.or(filter);
+          fetchQuery = fetchQuery.or(filter);
+        }
+
+        const [{ count }, { data, error }] = await Promise.all([countQuery, fetchQuery]);
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ keys: data || [], total: count || 0, page, limit }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'list_devices': {
+        const page = Math.max(1, (body.page as number) || 1);
+        const search = sanitizeSearch((body.search as string) || '');
+        const limit = Math.min(100, Math.max(1, (body.limit as number) || 30));
+        const offset = (page - 1) * limit;
+
+        let countQuery = adminClient
+          .from('device_push_tokens')
+          .select('*', { count: 'exact', head: true });
+
+        let fetchQuery = adminClient
+          .from('device_push_tokens')
+          .select('*')
+          .order('last_seen_at', { ascending: false, nullsFirst: false })
+          .range(offset, offset + limit - 1);
+
+        if (search) {
+          const filter = `device_name.ilike.%${search}%,device_id.ilike.%${search}%,platform.ilike.%${search}%`;
+          countQuery = countQuery.or(filter);
+          fetchQuery = fetchQuery.or(filter);
+        }
+
+        const [{ count }, { data, error }] = await Promise.all([countQuery, fetchQuery]);
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ devices: data || [], total: count || 0, page, limit }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

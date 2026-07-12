@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Users, Phone, MessageSquare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -12,9 +13,12 @@ interface DataPreviewProps {
 }
 
 const DataPreview = ({ data }: DataPreviewProps) => {
+  const [showAll, setShowAll] = useState(false);
   if (data.length === 0) return null;
 
   const hasCustomMessages = data.some(contact => contact.customMessage);
+  const displayData = showAll ? data : data.slice(0, 50);
+  const hasMore = data.length > 50;
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -61,8 +65,8 @@ const DataPreview = ({ data }: DataPreviewProps) => {
             </tr>
           </thead>
           <tbody>
-            {data.slice(0, 50).map((contact, index) => (
-              <tr 
+            {displayData.map((contact, index) => (
+              <tr
                 key={`${contact.phone}-${index}`}
                 className="border-t border-border hover:bg-secondary/50 transition-colors"
                 style={{ animationDelay: `${index * 30}ms` }}
@@ -79,13 +83,17 @@ const DataPreview = ({ data }: DataPreviewProps) => {
             ))}
           </tbody>
         </table>
-        {data.length > 50 && (
-          <div className="p-3 bg-secondary text-center text-sm text-muted-foreground">
-            عرض 50 من أصل {data.length} جهة اتصال
+        {hasMore && (
+          <div className="p-3 bg-secondary text-center">
+            <button
+              onClick={() => setShowAll(!showAll)}
+              className="text-sm text-primary hover:underline"
+            >
+              {showAll ? 'عرض أقل' : `عرض الكل (${data.length} جهة اتصال)`}
+            </button>
           </div>
         )}
       </div>
-
 
       {hasCustomMessages && (
         <div className="p-4 bg-accent/10 border border-accent/20 rounded-lg">

@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Spinner } from '@/components/Spinner';
+import { PasswordInput } from '@/components/PasswordInput';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('البريد الإلكتروني غير صالح');
@@ -20,7 +22,6 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -98,6 +99,15 @@ const Auth = () => {
         
         toast.success('تم تسجيل الدخول بنجاح');
       } else {
+        const { data: emailExists } = await supabase
+          .rpc('check_email_exists', { p_email: email });
+
+        if (emailExists) {
+          toast.error('هذا البريد الإلكتروني مسجّل بالفعل. سجّل دخولك أو استخدم بريداً آخر');
+          setLoading(false);
+          return;
+        }
+
         const redirectUrl = `${window.location.origin}/`;
         
         const { data, error } = await supabase.auth.signUp({
@@ -112,13 +122,22 @@ const Auth = () => {
         });
         
         if (error) {
-          toast.error(`خطأ إنشاء الحساب: ${error.message} (${error.status ?? '?'})`);
+          if (error.message.includes('already') || error.message.includes('registered')) {
+            toast.error('هذا البريد الإلكتروني مسجّل بالفعل. سجّل دخولك');
+          } else {
+            toast.error(`خطأ إنشاء الحساب: ${error.message}`);
+          }
           return;
         }
 
         if (data.user && !data.session) {
-          toast.success('تم إنشاء الحساب بنجاح. يرجى تسجيل الدخول');
-          setIsLogin(true);
+          if (data.user.email_confirmed_at) {
+            toast.error('هذا البريد الإلكتروني مسجّل بالفعل. سجّل دخولك');
+            setIsLogin(true);
+          } else {
+            toast.success('تم إنشاء الحساب بنجاح. يرجى تسجيل الدخول');
+            setIsLogin(true);
+          }
           return;
         }
         if (!data.user) {
@@ -137,8 +156,8 @@ const Auth = () => {
     <div className="min-h-screen bg-background flex items-center justify-center p-4" dir="rtl">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2">📱 SMS Pro</h1>
-          <p className="text-muted-foreground">منصة إرسال الرسائل النصية</p>
+          <h1 className="text-4xl font-bold text-primary mb-2">مرسال الهدهد</h1>
+          <p className="text-muted-foreground">إرسال رسائل SMS جماعية بسهولة</p>
         </div>
 
         <Card className="border-primary/20 shadow-xl">
@@ -207,30 +226,14 @@ const Auth = () => {
                     <Lock className="w-4 h-4 text-primary" />
                     كلمة المرور
                   </label>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="h-12 pl-12"
-                      dir="ltr"
-                      required
-                      name="password"
-                      autoComplete="current-password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-1 hover:bg-secondary rounded transition-colors"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-5 h-5 text-muted-foreground" />
-                      ) : (
-                        <Eye className="w-5 h-5 text-muted-foreground" />
-                      )}
-                    </button>
-                  </div>
+                  <PasswordInput
+                    value={password}
+                    onChange={setPassword}
+                    placeholder="••••••••"
+                    required
+                    name="password"
+                    autoComplete="current-password"
+                  />
                 </div>
               )}
 
@@ -252,7 +255,7 @@ const Auth = () => {
                 disabled={loading}
               >
                 {loading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <Spinner size="sm" color="border-white" />
                 ) : (
                   <>
                     {isForgotPassword 

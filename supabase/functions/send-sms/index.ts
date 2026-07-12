@@ -5,6 +5,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 interface SMSMessage {
   to: string;
   message: string;
+  name?: string;
 }
 
 interface RequestBody {
@@ -136,8 +137,8 @@ serve(async (req) => {
         continue;
       }
       
-      // Clean phone number - remove spaces and special chars except +
-      const cleanPhone = phone.replace(/[\s\-()]/g, '');
+      // Clean phone number - remove everything except digits and +
+      const cleanPhone = phone.replace(/[^\d+]/g, '');
       
       // Must start with + or digit, only contain digits after cleaning
       const digitsOnly = cleanPhone.replace(/\D/g, '');
@@ -162,6 +163,7 @@ serve(async (req) => {
       validMessages.push({
         to: cleanPhone,
         message: msgValidation.sanitized!,
+        name: typeof msg.name === 'string' ? msg.name.trim().substring(0, 255) : undefined,
       });
     }
 
@@ -169,7 +171,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           error: 'لا توجد أرقام هواتف صالحة',
-          invalidNumbers 
+          invalidCount: invalidNumbers.length,
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -248,6 +250,7 @@ serve(async (req) => {
     const campaignMessages = validMessages.map(msg => ({
       campaign_id: activeCampaignId!,
       phone: msg.to,
+      name: msg.name || null,
       message: msg.message,
       status: 'pending',
     }));
@@ -257,13 +260,17 @@ serve(async (req) => {
       .insert(campaignMessages);
 
     if (insertMsgsError) {
-      console.error('Failed to insert campaign messages');
+      console.error('Failed to insert campaign messages:', insertMsgsError.message);
+      return new Response(
+        JSON.stringify({ error: 'فشل حفظ الرسائل في قاعدة البيانات' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Call Hudhud API server-side
+    // Call Hudhud API server-side (only to + message — no name)
     const payload = {
       api_key: apiKeyData.api_key,
-      messages: validMessages
+      messages: validMessages.map(({ to, message }) => ({ to, message })),
     };
 
     const hudhudResponse = await fetch('https://www.hloov.com/api/sms/send', {
@@ -367,7 +374,6 @@ serve(async (req) => {
         message: `تم إرسال ${validMessages.length} رسالة بنجاح`,
         sentCount: validMessages.length,
         skippedCount: invalidNumbers.length,
-        invalidNumbers: invalidNumbers.length > 0 ? invalidNumbers : undefined,
         campaign_id: activeCampaignId,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -16,19 +16,19 @@ const ALLOWED_JWKS_URLS: Record<string, AllowedJwks> = {
 };
 
 const RATE_LIMIT_MAX = 10;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
+// JWKS cache to avoid fetching keys on every request
+const jwksCache = new Map<string, { keySet: ReturnType<typeof createRemoteJWKSet>; fetchedAt: number }>();
+const JWKS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function getCachedJWKS(jwksUri: string): ReturnType<typeof createRemoteJWKSet> {
+  const cached = jwksCache.get(jwksUri);
+  if (cached && Date.now() - cached.fetchedAt < JWKS_CACHE_TTL) {
+    return cached.keySet;
   }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
-  entry.count++;
-  return true;
+  const keySet = createRemoteJWKSet(new URL(jwksUri));
+  jwksCache.set(jwksUri, { keySet, fetchedAt: Date.now() });
+  return keySet;
 }
 
 interface VerifyRequest {
@@ -44,7 +44,20 @@ serve(async (req) => {
 
   try {
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    if (!checkRateLimit(clientIp)) {
+
+    // Database-based rate limiting (works across multiple Edge Function instances)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data: rateResult } = await adminClient.rpc('check_rate_limit_and_increment', {
+      p_user_id: clientIp,
+      p_limit_hourly: RATE_LIMIT_MAX,
+      p_limit_daily: RATE_LIMIT_MAX * 24,
+      p_messages_to_add: 1
+    });
+
+    if (!rateResult) {
       return new Response(
         JSON.stringify({ error: 'تم تجاوز الحد المسموح. حاول مرة أخرى لاحقاً' }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -77,7 +90,7 @@ serve(async (req) => {
       );
     }
 
-    const JWKS = createRemoteJWKSet(new URL(allowed.jwksUri));
+    const JWKS = getCachedJWKS(allowed.jwksUri);
 
     let payload: { sub?: string; email?: string; device_id?: string; [key: string]: unknown };
     try {
@@ -103,13 +116,10 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     let linked = false;
     if (authHeader) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } }
       });
-      const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user && payload.sub) {

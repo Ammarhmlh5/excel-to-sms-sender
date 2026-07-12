@@ -9,9 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import {
-  ArrowLeft, Shield, ShieldOff, ToggleLeft, ToggleRight,
-} from 'lucide-react';
+import { ArrowLeft, Shield, ShieldOff, ToggleLeft, ToggleRight } from 'lucide-react';
+import { CampaignStatusBadge, MessageStatusBadge } from '@/components/StatusBadges';
+import { formatDate } from '@/lib/formatDate';
+import { toggleAdminRole } from '@/lib/adminActions';
+import { Spinner } from '@/components/Spinner';
 
 interface UserDetailData {
   profile: {
@@ -70,26 +72,6 @@ interface UserDetailData {
   }>;
 }
 
-const statusBadge = (status: string) => {
-  const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    completed: 'default',
-    sending: 'secondary',
-    failed: 'destructive',
-    draft: 'outline',
-    pending: 'outline',
-    sent: 'default',
-  };
-  const labels: Record<string, string> = {
-    completed: 'مكتملة', sending: 'جارٍ الإرسال', failed: 'فاشلة',
-    draft: 'مسودة', pending: 'قيد الانتظار', sent: 'مرسلة',
-  };
-  return (
-    <Badge variant={variants[status] || 'outline'}>
-      {labels[status] || status}
-    </Badge>
-  );
-};
-
 const UserDetail = () => {
   const { userId } = useParams<{ userId: string }>();
   const { toast } = useToast();
@@ -141,33 +123,22 @@ const UserDetail = () => {
     }
   };
 
-  const toggleRole = async (isAdmin: boolean) => {
+  const handleToggleRole = async (isAdmin: boolean) => {
     if (!userId) return;
     setActionLoading('role');
-    try {
-      const { error } = await supabase.functions.invoke('admin-manage-users', {
-        body: { action: 'set_role', user_id: userId, role: isAdmin ? 'user' : 'admin' },
+    await toggleAdminRole(userId, isAdmin, async () => {
+      const { data: fresh } = await supabase.functions.invoke('admin-manage-users', {
+        body: { action: 'get_user', user_id: userId },
       });
-      if (error) {
-        toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-      } else {
-        toast({ title: 'تم', description: isAdmin ? 'تم إزالة صلاحية المشرف' : 'تم منح صلاحية المشرف' });
-        const { data: fresh } = await supabase.functions.invoke('admin-manage-users', {
-          body: { action: 'get_user', user_id: userId },
-        });
-        if (fresh) setData(fresh as UserDetailData);
-      }
-    } catch {
-      toast({ title: 'خطأ', description: 'فشلت العملية', variant: 'destructive' });
-    } finally {
-      setActionLoading(null);
-    }
+      if (fresh) setData(fresh as UserDetailData);
+    });
+    setActionLoading(null);
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <Spinner size="lg" color="border-primary" />
       </div>
     );
   }
@@ -223,10 +194,10 @@ const UserDetail = () => {
           variant={isAdmin ? 'destructive' : 'default'}
           size="sm"
           disabled={actionLoading === 'role'}
-          onClick={() => toggleRole(isAdmin)}
+          onClick={() => handleToggleRole(isAdmin)}
         >
           {actionLoading === 'role' ? (
-            <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin ml-1" />
+            <Spinner size="sm" className="ml-1" />
           ) : isAdmin ? (
             <ShieldOff className="w-4 h-4 ml-1" />
           ) : (
@@ -268,11 +239,11 @@ const UserDetail = () => {
                     data.campaigns.map((c) => (
                       <TableRow key={c.id}>
                         <TableCell className="font-medium">{c.name}</TableCell>
-                        <TableCell>{statusBadge(c.status)}</TableCell>
+                        <TableCell><CampaignStatusBadge status={c.status} /></TableCell>
                         <TableCell>{c.contacts_count}</TableCell>
                         <TableCell>{c.sent_count}</TableCell>
                         <TableCell>{c.failed_count}</TableCell>
-                        <TableCell>{new Date(c.created_at).toLocaleDateString('ar-EG')}</TableCell>
+                        <TableCell>{formatDate(c.created_at)}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -309,7 +280,7 @@ const UserDetail = () => {
                             {k.is_active ? 'نشط' : 'معطل'}
                           </Badge>
                         </TableCell>
-                        <TableCell>{new Date(k.created_at).toLocaleDateString('ar-EG')}</TableCell>
+                        <TableCell>{formatDate(k.created_at)}</TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -318,7 +289,7 @@ const UserDetail = () => {
                             onClick={() => toggleApiKey(k.id, k.is_active)}
                           >
                             {actionLoading === k.id ? (
-                              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin ml-1" />
+                              <Spinner size="sm" className="ml-1" />
                             ) : k.is_active ? (
                               <ToggleRight className="w-4 h-4 ml-1" />
                             ) : (
@@ -355,8 +326,8 @@ const UserDetail = () => {
                     data.recentLogs.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell>{l.recipients_count}</TableCell>
-                        <TableCell>{statusBadge(l.status)}</TableCell>
-                        <TableCell>{new Date(l.created_at).toLocaleString('ar-EG')}</TableCell>
+                        <TableCell><MessageStatusBadge status={l.status} /></TableCell>
+                        <TableCell>{formatDate(l.created_at)}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -398,7 +369,7 @@ const UserDetail = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {d.last_seen_at ? new Date(d.last_seen_at).toLocaleString('ar-EG') : '—'}
+                          {d.last_seen_at ? formatDate(d.last_seen_at) : '—'}
                         </TableCell>
                       </TableRow>
                     ))
@@ -435,7 +406,7 @@ const UserDetail = () => {
                         <TableCell>
                           {l.is_verified ? 'نعم' : 'لا'}
                         </TableCell>
-                        <TableCell>{new Date(l.linked_at).toLocaleDateString('ar-EG')}</TableCell>
+                        <TableCell>{formatDate(l.linked_at)}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -463,7 +434,7 @@ const UserDetail = () => {
                   ) : (
                     data.rateLimits.map((r, i) => (
                       <TableRow key={i}>
-                        <TableCell>{new Date(r.window_start).toLocaleString('ar-EG')}</TableCell>
+                        <TableCell>{formatDate(r.window_start)}</TableCell>
                         <TableCell>{r.messages_sent}</TableCell>
                         <TableCell>{r.requests_made}</TableCell>
                       </TableRow>

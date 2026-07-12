@@ -1,41 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import {
-  Search, ChevronLeft, ChevronRight,
-} from 'lucide-react';
-
-interface Campaign {
-  id: string;
-  user_id: string;
-  name: string;
-  status: string;
-  contacts_count: number;
-  sent_count: number;
-  failed_count: number;
-  source: string | null;
-  created_at: string;
-}
-
-const statusBadge = (status: string) => {
-  const m: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
-    completed: { variant: 'default', label: 'مكتملة' },
-    partially_completed: { variant: 'default', label: 'مكتملة جزئياً' },
-    sending: { variant: 'secondary', label: 'جارٍ الإرسال' },
-    queued: { variant: 'outline', label: 'بانتظار' },
-    failed: { variant: 'destructive', label: 'فاشلة' },
-    draft: { variant: 'outline', label: 'مسودة' },
-    cancelled: { variant: 'outline', label: 'ملغاة' },
-  };
-  const info = m[status] || { variant: 'outline' as const, label: status };
-  return <Badge variant={info.variant}>{info.label}</Badge>;
-};
+import { Search } from 'lucide-react';
+import { CampaignInfo } from '@/types/campaign';
+import { CampaignStatusBadge } from '@/components/StatusBadges';
+import { formatDateShort } from '@/lib/formatDate';
+import CampaignDetail from '@/components/CampaignDetail';
+import Pagination from '@/components/Pagination';
 
 const sourceLabel = (s: string | null) => {
   if (s === 'excel_upload') return 'رفع Excel';
@@ -47,38 +23,36 @@ const sourceLabel = (s: string | null) => {
 const PAGE_SIZE = 20;
 
 const CampaignsOverview = () => {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const { toast } = useToast();
+  const [campaigns, setCampaigns] = useState<CampaignInfo[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedCampaign, setSelectedCampaign] = useState<CampaignInfo | null>(null);
+
+  const fetchCampaigns = useCallback(async (p: number, s: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-manage-users', {
+        body: { action: 'list_campaigns', page: p, search: s, limit: PAGE_SIZE },
+      });
+      if (!error && data) {
+        setCampaigns(data.campaigns);
+        setTotal(data.total);
+      } else {
+        toast({ title: 'خطأ', description: error?.message || 'فشل في جلب الحملات', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في جلب الحملات', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        let query = supabase
-          .from('campaigns')
-          .select('*', { count: 'exact' });
-
-        if (search) {
-          query = query.ilike('name', `%${search}%`);
-        }
-
-        const offset = (page - 1) * PAGE_SIZE;
-        const { data, count } = await query
-          .order('created_at', { ascending: false })
-          .range(offset, offset + PAGE_SIZE - 1);
-
-        if (data) setCampaigns(data);
-        if (count !== null) setTotal(count);
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [page, search]);
+    fetchCampaigns(page, search);
+  }, [page, search, fetchCampaigns]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -133,14 +107,18 @@ const CampaignsOverview = () => {
                 </TableRow>
               ) : (
                 campaigns.map((c) => (
-                  <TableRow key={c.id}>
+                  <TableRow
+                    key={c.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setSelectedCampaign(c)}
+                  >
                     <TableCell className="font-medium max-w-[200px] truncate">{c.name}</TableCell>
-                    <TableCell>{statusBadge(c.status)}</TableCell>
+                    <TableCell><CampaignStatusBadge status={c.status} /></TableCell>
                     <TableCell>{sourceLabel(c.source)}</TableCell>
                     <TableCell>{c.contacts_count}</TableCell>
                     <TableCell>{c.sent_count}</TableCell>
                     <TableCell>{c.failed_count}</TableCell>
-                    <TableCell>{new Date(c.created_at).toLocaleDateString('ar-EG')}</TableCell>
+                    <TableCell>{formatDateShort(c.created_at)}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -149,19 +127,14 @@ const CampaignsOverview = () => {
         </CardContent>
       </Card>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-            <ChevronRight className="w-4 h-4 ml-1" />
-            السابق
-          </Button>
-          <span className="text-sm text-muted-foreground px-3">الصفحة {page} من {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-            التالي
-            <ChevronLeft className="w-4 h-4 mr-1" />
-          </Button>
-        </div>
-      )}
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+
+      <CampaignDetail
+        campaign={selectedCampaign}
+        open={!!selectedCampaign}
+        onOpenChange={(open) => { if (!open) setSelectedCampaign(null); }}
+        adminMode
+      />
     </div>
   );
 };

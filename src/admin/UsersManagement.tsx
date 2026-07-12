@@ -5,13 +5,15 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import {
-  Search, Eye, Shield, ShieldOff, ChevronLeft, ChevronRight,
-} from 'lucide-react';
+import { Search, Eye, Shield, ShieldOff } from 'lucide-react';
+import Pagination from '@/components/Pagination';
+import { toggleAdminRole } from '@/lib/adminActions';
+import { formatDate } from '@/lib/formatDate';
+import { Spinner } from '@/components/Spinner';
+import { RoleBadge } from '@/components/StatusBadges';
 
 interface User {
   user_id: string;
@@ -69,27 +71,10 @@ const UsersManagement = () => {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const toggleAdmin = async (userId: string, isAdmin: boolean) => {
+  const handleToggleAdmin = async (userId: string, isAdmin: boolean) => {
     setActionLoading(userId);
-    try {
-      const { error } = await supabase.functions.invoke('admin-manage-users', {
-        body: {
-          action: 'set_role',
-          user_id: userId,
-          role: isAdmin ? 'user' : 'admin',
-        },
-      });
-      if (error) {
-        toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-      } else {
-        toast({ title: 'تم', description: isAdmin ? 'تم إزالة صلاحية المشرف' : 'تم منح صلاحية المشرف' });
-        fetchUsers(page, search);
-      }
-    } catch {
-      toast({ title: 'خطأ', description: 'فشلت العملية', variant: 'destructive' });
-    } finally {
-      setActionLoading(null);
-    }
+    await toggleAdminRole(userId, isAdmin, () => fetchUsers(page, search));
+    setActionLoading(null);
   };
 
   return (
@@ -150,13 +135,10 @@ const UsersManagement = () => {
                       <TableCell className="font-medium">{u.full_name || '—'}</TableCell>
                       <TableCell>{u.company_name || '—'}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          {isAdmin && <Badge variant="default">مشرف</Badge>}
-                          {!isAdmin && <Badge variant="outline">مستخدم</Badge>}
-                        </div>
+                        <RoleBadge isAdmin={isAdmin} />
                       </TableCell>
                       <TableCell>
-                        {new Date(u.created_at).toLocaleDateString('ar-EG')}
+                        {formatDate(u.created_at)}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2 justify-end">
@@ -172,10 +154,10 @@ const UsersManagement = () => {
                             variant={isAdmin ? 'destructive' : 'outline'}
                             size="sm"
                             disabled={actionLoading === u.user_id}
-                            onClick={() => toggleAdmin(u.user_id, isAdmin)}
+                            onClick={() => handleToggleAdmin(u.user_id, isAdmin)}
                           >
                             {actionLoading === u.user_id ? (
-                              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin ml-1" />
+                              <Spinner size="sm" className="ml-1" />
                             ) : isAdmin ? (
                               <ShieldOff className="w-4 h-4 ml-1" />
                             ) : (
@@ -194,32 +176,7 @@ const UsersManagement = () => {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-          >
-            <ChevronRight className="w-4 h-4 ml-1" />
-            السابق
-          </Button>
-          <span className="text-sm text-muted-foreground px-3">
-            الصفحة {page} من {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => p + 1)}
-          >
-            التالي
-            <ChevronLeft className="w-4 h-4 mr-1" />
-          </Button>
-        </div>
-      )}
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
   );
 };

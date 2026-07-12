@@ -17,3 +17,12 @@ verify_jwt = true
 
 [functions.manage-user-links]
 verify_jwt = true
+
+[functions.create-admin]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = true
+
+[functions.retry-sms]
+verify_jwt = true

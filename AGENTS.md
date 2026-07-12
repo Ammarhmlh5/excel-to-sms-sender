@@ -2,20 +2,32 @@
 
 ## Project Overview
 
-Excel-to-SMS sender. Users upload Excel files, map columns (phone/name/message), and send bulk SMS via Hudhud API (`hloov.com`). Built with React + Vite + Supabase (Auth + DB + Edge Functions).
+Excel-to-SMS sender platform. Users upload Excel files, map columns (phone/name/message), and send bulk SMS via Hudhud API (`hloov.com`). Built with React + Vite + Supabase (Auth + DB + Edge Functions).
 
-**Vision:** This is one "platform" that connects to the **Universal SMS Gateway** mobile app (هدهد موبايل). Mobile app users authenticate here, register their devices, and receive SMS commands via Supabase Realtime.
+**Vision:** This is a multi-user platform that connects to the **Universal SMS Gateway** mobile app (هدهد موبايل). Mobile app users authenticate here, register their devices, and receive SMS commands via Supabase Realtime.
 
 ## Architecture
 
 ```
-[Web App (React)] ───→ [Supabase Edge Function: send-sms] ───→ [Hudhud API (hloov.com)]
-                          │                                        ↑
-                          ├──→ [campaigns + campaign_messages] ─────┘
-                          │
-                          ├──→ [Supabase Realtime] ─────→ [هدهد موبايل] (notifications)
-                          │
-                          └──→ [device_push_tokens] ←─── [register-device EF] ←── [هدهد موبايل]
+┌─────────────────────────────────────────────────────────────┐
+│                      مرسال الهدهد (المنصة)                    │
+├─────────────────────┬───────────────────────────────────────┤
+│  واجهة المستخدم     │  لوحة تحكم المستخدم (لكل حساب)         │
+│  الرئيسية           │                                        │
+│                     │  • حملاتي (campaigns)                  │
+│  • رفع Excel        │  • سجل إرسال SMS                      │
+│  • ربط الأعمدة      │  • مفاتيح API الخاصة بي               │
+│  • إرسال SMS        │  • أجهزتي المسجلة                     │
+│                     │  • حسابي وإعداداتي                     │
+├─────────────────────┴───────────────────────────────────────┤
+│               لوحة تحكم المطور (Super Admin)                  │
+│                                                               │
+│  • إدارة كل المستخدمين                                       │
+│  • عرض كل الحملات لجميع المستخدمين                            │
+│  • إدارة الأجهزة لجميع المستخدمين                             │
+│  • السجلات الكاملة                                           │
+│  • إدارة الأدوار والصلاحيات                                   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Cross-Platform Redirect Flow
@@ -34,13 +46,19 @@ Excel-to-SMS sender. Users upload Excel files, map columns (phone/name/message),
 | `src/pages/Index.tsx` | Main page: upload Excel, map columns, send + redirect flow from Hudhud |
 | `src/pages/Auth.tsx` | Login / signup / forgot password |
 | `src/components/ColumnMapper.tsx` | Auto-detect + manual column mapping |
+| `src/lib/columnDetection.ts` | Column type detection utilities + ColumnMapping type |
+| `src/components/RateLimitDisplay.tsx` | Hourly/daily rate limit usage with progress bars |
 | `src/components/FileUploader.tsx` | Drag-and-drop Excel upload |
 | `src/components/SendButton.tsx` | Send button + loading state |
 | `src/components/SendHistory.tsx` | Campaign history with Realtime updates |
 | `src/components/LinkedAccounts.tsx` | Manage cross-platform linked accounts |
 | `src/components/SettingsDialog.tsx` | API key + password + linked accounts management |
 | `src/hooks/useRealtimeCampaigns.ts` | Realtime subscription for campaign status updates |
+| `src/components/dashboard/*.tsx` | User dashboard components (MyCampaigns, MySmsLogs, MyApiKeys, MyDevices, AccountSettings) |
+| `src/admin/*.tsx` | Super admin components (UsersManagement, CampaignsOverview, SmsLogsView, ApiKeysView, DevicesView, RolesManagement) |
 | `supabase/functions/send-sms/index.ts` | Edge Function: validates, rate-limits, sends via hloov.com, tracks campaigns |
+| `supabase/functions/send-email/index.ts` | Edge Function: sends campaign via email (JSON payload) |
+| `supabase/functions/retry-sms/index.ts` | Edge Function: resends failed messages from a campaign (rate-limited) |
 | `supabase/functions/register-device/index.ts` | Edge Function: mobile app device registration + auto user_link creation |
 | `supabase/functions/verify-jwks/index.ts` | Edge Function: JWT verification + account linking (rate-limited) |
 | `supabase/functions/manage-user-links/index.ts` | Edge Function: GET/DELETE linked accounts |
@@ -51,10 +69,14 @@ Excel-to-SMS sender. Users upload Excel files, map columns (phone/name/message),
 ## Commands
 
 ```bash
-npm run dev          # Start Vite dev server
+npm run dev          # Start Vite dev server (main app, port 5180)
+npm run dev:admin    # Start admin panel dev server (port 5181)
 npm run build        # Build for production
+npm run build:admin  # Build admin panel for production
 npm run lint         # Run ESLint
-supabase db push     # Push all pending migrations to Supabase
+npm run deploy:db    # Push all pending migrations to Supabase
+npm run deploy:functions  # Deploy all Edge Functions
+npm run deploy:all   # Deploy DB + all Edge Functions
 ```
 
 ## Code Conventions
@@ -98,6 +120,7 @@ New tables: `campaigns`, `campaign_messages`, `device_push_tokens`, `user_links`
 - `verify-jwks` only accepts hardcoded whitelisted JWKS URLs (no arbitrary `jwks_url` param — SSRF prevention)
 - `verify-jwks` has rate limiting: 10 requests/minute/IP
 - `verify_jwt = true` for send-sms and register-device (Supabase Gateway level)
+- `retry-sms` has rate limiting + per-request cap (same as send-sms), verify_jwt = true
 - `register-device` validates: device_id ≤ 255 chars, platform ∈ {android, ios}
 - `register-device` auto-creates `user_link` with `linked_via: 'device_registration'`
 - `send-sms` uses `adminClient` (service role) for all DB writes — bypasses RLS

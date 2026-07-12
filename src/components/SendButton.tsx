@@ -1,4 +1,4 @@
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface SendButtonProps {
@@ -6,9 +6,11 @@ interface SendButtonProps {
   disabled: boolean;
   isLoading: boolean;
   contactCount: number;
+  sendMode?: 'sms' | 'email';
 }
 
-const SendButton = ({ onClick, disabled, isLoading, contactCount }: SendButtonProps) => {
+const SendButton = ({ onClick, disabled, isLoading, contactCount, sendMode = 'email' }: SendButtonProps) => {
+  const isEmail = sendMode === 'email';
   return (
     <Button
       onClick={onClick}
@@ -19,12 +21,16 @@ const SendButton = ({ onClick, disabled, isLoading, contactCount }: SendButtonPr
       {isLoading ? (
         <>
           <Loader2 className="w-5 h-5 ml-2 animate-spin" />
-          جاري الإرسال...
+          {isEmail ? 'جاري إرسال البريد...' : 'جاري الإرسال...'}
         </>
       ) : (
         <>
-          <Send className="w-5 h-5 ml-2" />
-          إرسال الرسائل ({contactCount} جهة اتصال)
+          {isEmail ? (
+            <Mail className="w-5 h-5 ml-2" />
+          ) : (
+            <Send className="w-5 h-5 ml-2" />
+          )}
+          {isEmail ? `إرسال عبر البريد (${contactCount} جهة اتصال)` : `إرسال SMS (${contactCount} جهة اتصال)`}
         </>
       )}
     </Button>

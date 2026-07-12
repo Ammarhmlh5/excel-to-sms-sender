@@ -5,10 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:admin": "vite --config vite.config.admin.ts",
     "build": "vite build",
+    "build:admin": "vite build --config vite.config.admin.ts",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:db": "supabase db push",
+    "deploy:functions": "supabase functions deploy send-sms send-email retry-sms register-device verify-jwks manage-user-links cleanup-old-data admin-manage-users create-admin",
+    "deploy:functions:send-sms": "supabase functions deploy send-sms",
+    "deploy:functions:send-email": "supabase functions deploy send-email",
+    "deploy:functions:retry-sms": "supabase functions deploy retry-sms",
+    "deploy:all": "npm run deploy:db && npm run deploy:functions"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.14",

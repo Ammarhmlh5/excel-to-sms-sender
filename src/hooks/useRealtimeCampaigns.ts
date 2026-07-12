@@ -44,7 +44,7 @@ export function useRealtimeCampaigns() {
     fetchCampaigns();
 
     channelRef.current = supabase
-      .channel('campaigns-changes')
+      .channel(`campaigns-changes-${user.id}`)
       .on(
         'postgres_changes',
         {

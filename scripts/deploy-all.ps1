@@ -37,7 +37,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$functions = @("send-sms", "register-device", "verify-jwks", "cleanup-old-data", "admin-manage-users", "manage-user-links")
+$functions = @("send-sms", "send-email", "register-device", "verify-jwks", "cleanup-old-data", "admin-manage-users", "manage-user-links", "create-admin")
 foreach ($fn in $functions) {
     Write-Host "  ↳ رفع $fn..." -ForegroundColor Yellow
     npx supabase@1 functions deploy $fn

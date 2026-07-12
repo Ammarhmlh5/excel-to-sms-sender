@@ -1,11 +1,38 @@
 import { useCallback, useState } from 'react';
 import { Upload, FileSpreadsheet, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface FileUploaderProps {
   onFileSelect: (file: File) => void;
   selectedFile: File | null;
   onClear: () => void;
+}
+
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+function isValidExcelFile(file: File): boolean {
+  const validExtensions = ['.xlsx', '.xls'];
+  const validMimeTypes = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+  ];
+  const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+  const hasValidMimeType = validMimeTypes.includes(file.type);
+  return hasValidExtension || hasValidMimeType;
+}
+
+function validateFile(file: File): boolean {
+  if (!isValidExcelFile(file)) {
+    toast.error('صيغة الملف غير صالحة — الرجاء استخدام .xlsx أو .xls');
+    return false;
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    toast.error(`الملف أكبر من ${MAX_FILE_SIZE_MB} ميجابايت — الرجاء تقليل حجم الملف`);
+    return false;
+  }
+  return true;
 }
 
 const FileUploader = ({ onFileSelect, selectedFile, onClear }: FileUploaderProps) => {
@@ -26,14 +53,14 @@ const FileUploader = ({ onFileSelect, selectedFile, onClear }: FileUploaderProps
     setIsDragging(false);
     
     const file = e.dataTransfer.files[0];
-    if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+    if (file && validateFile(file)) {
       onFileSelect(file);
     }
   }, [onFileSelect]);
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && validateFile(file)) {
       onFileSelect(file);
     }
   }, [onFileSelect]);

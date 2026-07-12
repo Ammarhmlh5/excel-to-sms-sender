@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Link, Unlink, Smartphone, Globe, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
+import { Spinner } from '@/components/Spinner';
 
 interface UserLink {
   id: string;
@@ -81,7 +82,7 @@ const LinkedAccounts = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" color="border-primary" />
       </div>
     );
   }
@@ -150,7 +151,7 @@ const LinkedAccounts = () => {
                 className="text-destructive hover:text-destructive"
               >
                 {deleting === link.id ? (
-                  <div className="w-4 h-4 border-2 border-destructive border-t-transparent rounded-full animate-spin" />
+                  <Spinner size="sm" color="border-destructive" />
                 ) : (
                   <Unlink className="w-4 h-4" />
                 )}

@@ -8,13 +8,13 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { to: '/admin', icon: LayoutDashboard, label: 'لوحة التحكم', end: true },
-  { to: '/admin/users', icon: Users, label: 'المستخدمون' },
-  { to: '/admin/campaigns', icon: MessageSquare, label: 'الحملات' },
-  { to: '/admin/logs', icon: BarChart3, label: 'سجلات الإرسال' },
-  { to: '/admin/api-keys', icon: KeyRound, label: 'مفاتيح API' },
-  { to: '/admin/devices', icon: Smartphone, label: 'الأجهزة' },
-  { to: '/admin/roles', icon: Shield, label: 'الصلاحيات' },
+  { to: '/', icon: LayoutDashboard, label: 'لوحة التحكم', end: true },
+  { to: '/users', icon: Users, label: 'المستخدمون' },
+  { to: '/campaigns', icon: MessageSquare, label: 'الحملات' },
+  { to: '/logs', icon: BarChart3, label: 'سجلات الإرسال' },
+  { to: '/api-keys', icon: KeyRound, label: 'مفاتيح API' },
+  { to: '/devices', icon: Smartphone, label: 'الأجهزة' },
+  { to: '/roles', icon: Shield, label: 'الصلاحيات' },
 ];
 
 const AdminLayout = () => {

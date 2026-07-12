@@ -366,6 +366,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      check_email_exists: {
+        Args: {
+          p_email: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "user"
