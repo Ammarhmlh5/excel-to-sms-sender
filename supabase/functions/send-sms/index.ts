@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { getAdapter } from "../_shared/providers/index.ts";
+import { logError, logInfo } from "../_shared/log.ts";
 
 interface SMSMessage {
   to: string;
@@ -67,7 +69,7 @@ serve(async (req) => {
     // Verify user authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      console.error('Authentication failed');
+      logError('Authentication failed', { authError });
       return new Response(
         JSON.stringify({ error: 'غير مصرح - الرجاء تسجيل الدخول' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -85,7 +87,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (apiKeyError) {
-      console.error('Failed to retrieve API key');
+      logError('Failed to retrieve API key', { apiKeyError });
       return new Response(
         JSON.stringify({ error: 'خطأ في جلب مفتاح API' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -207,7 +209,7 @@ serve(async (req) => {
       );
     }
 
-    // Create campaign if not provided
+    // Use an already-saved campaign when provided; otherwise create one on the fly.
     let activeCampaignId = body.campaign_id;
     if (activeCampaignId) {
       const { data: ownership } = await adminClient
@@ -246,25 +248,98 @@ serve(async (req) => {
       activeCampaignId = newCampaign.id;
     }
 
-    // Insert campaign messages (only if we have a valid campaign_id)
-    const campaignMessages = validMessages.map(msg => ({
-      campaign_id: activeCampaignId!,
-      phone: msg.to,
-      name: msg.name || null,
-      message: msg.message,
-      status: 'pending',
-    }));
+    // If the campaign was not pre-saved, insert messages now.
+    if (!body.campaign_id) {
+      const campaignMessages = validMessages.map(msg => ({
+        campaign_id: activeCampaignId!,
+        phone: msg.to,
+        name: msg.name || null,
+        message: msg.message,
+        status: 'pending',
+      }));
 
-    const { error: insertMsgsError } = await adminClient
+      const { error: insertMsgsError } = await adminClient
+        .from('campaign_messages')
+        .insert(campaignMessages);
+
+      if (insertMsgsError) {
+        console.error('Failed to insert campaign messages:', insertMsgsError.message);
+        return new Response(
+          JSON.stringify({ error: 'فشل حفظ الرسائل في قاعدة البيانات' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    await adminClient
+      .from('campaigns')
+      .update({ status: 'sending', updated_at: new Date().toISOString() })
+      .eq('id', activeCampaignId);
+
+    const { data: campaignMessagesRows, error: campaignMessagesRowsError } = await adminClient
       .from('campaign_messages')
-      .insert(campaignMessages);
+      .select('id, phone, message')
+      .eq('campaign_id', activeCampaignId)
+      .order('created_at', { ascending: true });
 
-    if (insertMsgsError) {
-      console.error('Failed to insert campaign messages:', insertMsgsError.message);
+    if (campaignMessagesRowsError) {
+      logError('Failed to read campaign messages', { campaignMessagesRowsError });
       return new Response(
-        JSON.stringify({ error: 'فشل حفظ الرسائل في قاعدة البيانات' }),
+        JSON.stringify({ error: 'فشل قراءة رسائل الحملة' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    const deliveryAttemptsPayload = validMessages
+      .map((msg, index) => {
+        const row = campaignMessagesRows?.[index];
+        if (!row) return null;
+        const idempotencyKey = crypto.randomUUID();
+        return {
+          campaign_message_id: row.id,
+          provider: 'hudhud',
+          channel: 'sms',
+          status: 'queued',
+          attempts: 0,
+          provider_reference: idempotencyKey,
+          idempotency_key: idempotencyKey,
+        };
+      })
+      .filter((item): item is { campaign_message_id: string; provider: string; channel: string; status: string; attempts: number; provider_reference: string; idempotency_key: string } => Boolean(item));
+
+    let attemptIds: string[] = [];
+    if (deliveryAttemptsPayload.length > 0) {
+      const { data: insertedAttempts, error: attemptsError } = await adminClient
+        .from('delivery_attempts')
+        .insert(deliveryAttemptsPayload)
+        .select('id, idempotency_key, provider_reference');
+
+      if (attemptsError) {
+        logError('Failed to create delivery attempts', { message: attemptsError.message });
+        return new Response(
+          JSON.stringify({ error: 'فشل تسجيل محاولات الإرسال' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      attemptIds = (insertedAttempts || []).map((attempt) => attempt.id);
+      const attemptIdMap = (insertedAttempts || []).reduce((acc: Record<string, string>, a: any) => {
+        if (a.idempotency_key) acc[a.idempotency_key] = a.id;
+        if (a.provider_reference) acc[a.provider_reference] = a.id;
+        return acc;
+      }, {});
+      await adminClient
+        .from('delivery_attempts')
+        .update({ status: 'sending', attempts: 1 })
+        .in('id', attemptIds);
+
+      await adminClient
+        .from('delivery_events')
+        .insert(attemptIds.map((attemptId) => ({
+          delivery_attempt_id: attemptId,
+          event_type: 'dispatch_started',
+          event_data: { channel: 'sms', provider: 'hudhud' },
+        })));
     }
 
     // Call Hudhud API server-side (only to + message — no name)
@@ -273,25 +348,13 @@ serve(async (req) => {
       messages: validMessages.map(({ to, message }) => ({ to, message })),
     };
 
-    const hudhudController = new AbortController();
-    const hudhudTimeout = setTimeout(() => hudhudController.abort(), 30000);
-    let hudhudResult: Record<string, unknown> = {};
-    let hudhudResponse: Response | undefined;
+    // Select provider adapter (default to hudhud for SMS)
+    const providerName = 'hudhud';
+    const adapter = await getAdapter(providerName) as any;
+
+    let providerResult: { ok: boolean; raw: Record<string, unknown> } = { ok: false, raw: { error: 'no_result' } };
     try {
-      hudhudResponse = await fetch('https://www.hloov.com/api/sms/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        signal: hudhudController.signal,
-      });
-      try {
-        hudhudResult = await hudhudResponse.json();
-      } catch {
-        hudhudResult = { error: 'invalid_json', message: 'Provider returned non-JSON response' };
-      }
+      providerResult = await adapter.send(validMessages.map(m => ({ to: m.to, message: m.message })));
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         return new Response(
@@ -299,14 +362,12 @@ serve(async (req) => {
           { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      throw err;
-    } finally {
-      clearTimeout(hudhudTimeout);
+      console.error('Provider send error', err);
+      providerResult = { ok: false, raw: { error: String(err) } };
     }
 
-    // Determine actual success: HTTP 2xx AND body success flag
-    const bodySuccess = hudhudResult.success !== false && !hudhudResult.error;
-    const sentSuccess = hudhudResponse!.ok && bodySuccess;
+    const hudhudResult = providerResult.raw;
+    const sentSuccess = providerResult.ok;
 
     // Log to database
     await adminClient.from('sms_logs').insert({
@@ -333,11 +394,33 @@ serve(async (req) => {
         ? { status: 'sent', sent_at: new Date().toISOString() }
         : { status: 'failed', error: (hudhudResult.message as string) || 'فشل الإرسال' };
 
-      await adminClient
-        .from('campaign_messages')
-        .update(msgUpdate)
-        .eq('campaign_id', activeCampaignId)
-        .eq('status', 'pending');
+      const messageIds = (campaignMessagesRows || []).slice(0, validMessages.length).map((row) => row.id);
+
+      if (messageIds.length > 0) {
+        await adminClient
+          .from('campaign_messages')
+          .update(msgUpdate)
+          .in('id', messageIds);
+      }
+
+      if (attemptIds.length > 0) {
+        await adminClient
+          .from('delivery_attempts')
+          .update({
+            status: sentSuccess ? 'sent' : 'failed',
+            response_data: hudhudResult,
+            error_message: sentSuccess ? null : ((hudhudResult.message as string) || 'فشل الإرسال'),
+          })
+          .in('id', attemptIds);
+
+        await adminClient
+          .from('delivery_events')
+          .insert(attemptIds.map((attemptId) => ({
+            delivery_attempt_id: attemptId,
+            event_type: sentSuccess ? 'sent' : 'failed',
+            event_data: hudhudResult,
+          })));
+      }
     }
 
     // Send push notification to mobile devices on success
@@ -368,18 +451,19 @@ serve(async (req) => {
             body: JSON.stringify(pushMessages),
           });
         }
-      } catch {
-        console.error('Failed to send push notification');
+      } catch (e) {
+        logError('Failed to send push notification', { error: e });
       }
     }
 
     if (!sentSuccess) {
+      const errorMsg = (hudhudResult && (hudhudResult as any).message) || 'فشل في إرسال الرسائل';
       return new Response(
         JSON.stringify({ 
-          error: (hudhudResult.message as string) || 'فشل في إرسال الرسائل',
+          error: errorMsg,
           campaign_id: activeCampaignId,
         }),
-        { status: hudhudResponse!.ok ? 400 : hudhudResponse!.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

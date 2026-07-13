@@ -3,18 +3,45 @@
 -- ============================================================
 
 -- 1. CHECK constraints على rate_limits (منع القيم السالبة)
-ALTER TABLE public.rate_limits
-  ADD CONSTRAINT rate_limits_messages_sent_nonneg
-  CHECK (messages_sent >= 0);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.rate_limits'::regclass
+      AND conname = 'rate_limits_messages_sent_nonneg'
+  ) THEN
+    ALTER TABLE public.rate_limits
+      ADD CONSTRAINT rate_limits_messages_sent_nonneg
+      CHECK (messages_sent >= 0);
+  END IF;
 
-ALTER TABLE public.rate_limits
-  ADD CONSTRAINT rate_limits_requests_made_nonneg
-  CHECK (requests_made >= 0);
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.rate_limits'::regclass
+      AND conname = 'rate_limits_requests_made_nonneg'
+  ) THEN
+    ALTER TABLE public.rate_limits
+      ADD CONSTRAINT rate_limits_requests_made_nonneg
+      CHECK (requests_made >= 0);
+  END IF;
+END $$;
 
 -- 2. CHECK constraint على sms_logs.status
-ALTER TABLE public.sms_logs
-  ADD CONSTRAINT sms_logs_status_check
-  CHECK (status IN ('pending', 'sent', 'failed'));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.sms_logs'::regclass
+      AND conname = 'sms_logs_status_check'
+  ) THEN
+    ALTER TABLE public.sms_logs
+      ADD CONSTRAINT sms_logs_status_check
+      CHECK (status IN ('pending', 'sent', 'failed'));
+  END IF;
+END $$;
 
 -- 3. Covering index على campaigns(id, user_id) لتسريع RLS على campaign_messages
 CREATE INDEX IF NOT EXISTS idx_campaigns_id_user

@@ -19,10 +19,21 @@ CREATE TABLE IF NOT EXISTS public.campaigns (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.campaigns TO authenticated;
 GRANT ALL ON public.campaigns TO service_role;
 ALTER TABLE public.campaigns ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users view own campaigns" ON public.campaigns FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users insert own campaigns" ON public.campaigns FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users update own campaigns" ON public.campaigns FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users delete own campaigns" ON public.campaigns FOR DELETE USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'campaigns' AND policyname = 'Users view own campaigns') THEN
+    CREATE POLICY "Users view own campaigns" ON public.campaigns FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'campaigns' AND policyname = 'Users insert own campaigns') THEN
+    CREATE POLICY "Users insert own campaigns" ON public.campaigns FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'campaigns' AND policyname = 'Users update own campaigns') THEN
+    CREATE POLICY "Users update own campaigns" ON public.campaigns FOR UPDATE USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'campaigns' AND policyname = 'Users delete own campaigns') THEN
+    CREATE POLICY "Users delete own campaigns" ON public.campaigns FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_campaigns_user_id ON public.campaigns(user_id);
 
 -- Campaign messages
@@ -41,10 +52,17 @@ CREATE TABLE IF NOT EXISTS public.campaign_messages (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.campaign_messages TO authenticated;
 GRANT ALL ON public.campaign_messages TO service_role;
 ALTER TABLE public.campaign_messages ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users view own campaign messages" ON public.campaign_messages FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.campaigns WHERE campaigns.id = campaign_messages.campaign_id AND campaigns.user_id = auth.uid()));
-CREATE POLICY "Users insert own campaign messages" ON public.campaign_messages FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.campaigns WHERE campaigns.id = campaign_messages.campaign_id AND campaigns.user_id = auth.uid()));
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'campaign_messages' AND policyname = 'Users view own campaign messages') THEN
+    CREATE POLICY "Users view own campaign messages" ON public.campaign_messages FOR SELECT
+      USING (EXISTS (SELECT 1 FROM public.campaigns WHERE campaigns.id = campaign_messages.campaign_id AND campaigns.user_id = auth.uid()));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'campaign_messages' AND policyname = 'Users insert own campaign messages') THEN
+    CREATE POLICY "Users insert own campaign messages" ON public.campaign_messages FOR INSERT
+      WITH CHECK (EXISTS (SELECT 1 FROM public.campaigns WHERE campaigns.id = campaign_messages.campaign_id AND campaigns.user_id = auth.uid()));
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_campaign_messages_campaign ON public.campaign_messages(campaign_id);
 
 -- Device push tokens
@@ -66,10 +84,21 @@ CREATE TABLE IF NOT EXISTS public.device_push_tokens (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.device_push_tokens TO authenticated;
 GRANT ALL ON public.device_push_tokens TO service_role;
 ALTER TABLE public.device_push_tokens ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users view own device tokens" ON public.device_push_tokens FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users insert own device tokens" ON public.device_push_tokens FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users update own device tokens" ON public.device_push_tokens FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users delete own device tokens" ON public.device_push_tokens FOR DELETE USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'device_push_tokens' AND policyname = 'Users view own device tokens') THEN
+    CREATE POLICY "Users view own device tokens" ON public.device_push_tokens FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'device_push_tokens' AND policyname = 'Users insert own device tokens') THEN
+    CREATE POLICY "Users insert own device tokens" ON public.device_push_tokens FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'device_push_tokens' AND policyname = 'Users update own device tokens') THEN
+    CREATE POLICY "Users update own device tokens" ON public.device_push_tokens FOR UPDATE USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'device_push_tokens' AND policyname = 'Users delete own device tokens') THEN
+    CREATE POLICY "Users delete own device tokens" ON public.device_push_tokens FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- User links
 CREATE TABLE IF NOT EXISTS public.user_links (
@@ -86,6 +115,15 @@ CREATE TABLE IF NOT EXISTS public.user_links (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_links TO authenticated;
 GRANT ALL ON public.user_links TO service_role;
 ALTER TABLE public.user_links ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users view own links" ON public.user_links FOR SELECT USING (auth.uid() = local_user_id);
-CREATE POLICY "Users insert own links" ON public.user_links FOR INSERT WITH CHECK (auth.uid() = local_user_id);
-CREATE POLICY "Users delete own links" ON public.user_links FOR DELETE USING (auth.uid() = local_user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_links' AND policyname = 'Users view own links') THEN
+    CREATE POLICY "Users view own links" ON public.user_links FOR SELECT USING (auth.uid() = local_user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_links' AND policyname = 'Users insert own links') THEN
+    CREATE POLICY "Users insert own links" ON public.user_links FOR INSERT WITH CHECK (auth.uid() = local_user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_links' AND policyname = 'Users delete own links') THEN
+    CREATE POLICY "Users delete own links" ON public.user_links FOR DELETE USING (auth.uid() = local_user_id);
+  END IF;
+END $$;

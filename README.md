@@ -62,7 +62,9 @@ This project is built with:
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+See `SUPABASE_DEPLOY.md` for instructions to run database migrations, execute provider tests, and deploy Supabase Edge Functions.
+
+Admin UI: After deploying the app and logging in as an admin, the Super Admin panel includes a new **قائمة DLQ** page at `/super-admin/dead-letters` where you can inspect and requeue dead-lettered messages.
 
 ## Can I connect a custom domain to my Lovable project?
 

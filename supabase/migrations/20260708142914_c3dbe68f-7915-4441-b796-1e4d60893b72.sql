@@ -1,8 +1,13 @@
 -- 1) Add DELETE policy for sms_logs so users can delete their own logs
-CREATE POLICY "Users can delete their own SMS logs"
-ON public.sms_logs
-FOR DELETE
-USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'sms_logs' AND policyname = 'Users can delete their own SMS logs') THEN
+    CREATE POLICY "Users can delete their own SMS logs"
+    ON public.sms_logs
+    FOR DELETE
+    USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- 2) Harden handle_new_user() - validate & sanitize user metadata
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -51,8 +56,13 @@ GRANT ALL ON public.rate_limits TO service_role;
 
 ALTER TABLE public.rate_limits ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own rate limits"
-ON public.rate_limits
-FOR SELECT
-USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'rate_limits' AND policyname = 'Users can view their own rate limits') THEN
+    CREATE POLICY "Users can view their own rate limits"
+    ON public.rate_limits
+    FOR SELECT
+    USING (auth.uid() = user_id);
+  END IF;
+END $$;
 -- Writes are performed by the edge function using the service role only.

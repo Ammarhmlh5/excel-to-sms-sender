@@ -1,9 +1,14 @@
 
 -- App role enum
-CREATE TYPE public.app_role AS ENUM ('admin', 'user');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'app_role' AND typnamespace = 'public'::regnamespace) THEN
+    CREATE TYPE public.app_role AS ENUM ('admin', 'user');
+  END IF;
+END $$;
 
 -- User roles table
-CREATE TABLE public.user_roles (
+CREATE TABLE IF NOT EXISTS public.user_roles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   role public.app_role NOT NULL,
@@ -31,15 +36,22 @@ AS $$
 $$;
 
 -- Policies
-CREATE POLICY "Users can view their own roles"
-ON public.user_roles FOR SELECT
-TO authenticated
-USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_roles' AND policyname = 'Users can view their own roles') THEN
+    CREATE POLICY "Users can view their own roles"
+    ON public.user_roles FOR SELECT
+    TO authenticated
+    USING (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Admins can view all roles"
-ON public.user_roles FOR SELECT
-TO authenticated
-USING (public.has_role(auth.uid(), 'admin'));
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_roles' AND policyname = 'Admins can view all roles') THEN
+    CREATE POLICY "Admins can view all roles"
+    ON public.user_roles FOR SELECT
+    TO authenticated
+    USING (public.has_role(auth.uid(), 'admin'));
+  END IF;
+END $$;
 
 -- Grant admin to the chosen user (only if user exists in auth.users)
 DO $$

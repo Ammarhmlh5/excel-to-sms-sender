@@ -1,5 +1,5 @@
 -- Create profiles table for users
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
   full_name TEXT,
@@ -12,23 +12,32 @@ CREATE TABLE public.profiles (
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
-CREATE POLICY "Users can view their own profile" 
-ON public.profiles 
-FOR SELECT 
-USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'profiles' AND policyname = 'Users can view their own profile') THEN
+    CREATE POLICY "Users can view their own profile"
+    ON public.profiles
+    FOR SELECT
+    USING (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Users can create their own profile" 
-ON public.profiles 
-FOR INSERT 
-WITH CHECK (auth.uid() = user_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'profiles' AND policyname = 'Users can create their own profile') THEN
+    CREATE POLICY "Users can create their own profile"
+    ON public.profiles
+    FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Users can update their own profile" 
-ON public.profiles 
-FOR UPDATE 
-USING (auth.uid() = user_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'profiles' AND policyname = 'Users can update their own profile') THEN
+    CREATE POLICY "Users can update their own profile"
+    ON public.profiles
+    FOR UPDATE
+    USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Create api_keys table for storing Hudhud API keys
-CREATE TABLE public.api_keys (
+CREATE TABLE IF NOT EXISTS public.api_keys (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   key_name TEXT NOT NULL DEFAULT 'Hudhud API Key',
@@ -42,28 +51,39 @@ CREATE TABLE public.api_keys (
 ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 
 -- API keys policies
-CREATE POLICY "Users can view their own API keys" 
-ON public.api_keys 
-FOR SELECT 
-USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'api_keys' AND policyname = 'Users can view their own API keys') THEN
+    CREATE POLICY "Users can view their own API keys"
+    ON public.api_keys
+    FOR SELECT
+    USING (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Users can create their own API keys" 
-ON public.api_keys 
-FOR INSERT 
-WITH CHECK (auth.uid() = user_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'api_keys' AND policyname = 'Users can create their own API keys') THEN
+    CREATE POLICY "Users can create their own API keys"
+    ON public.api_keys
+    FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Users can update their own API keys" 
-ON public.api_keys 
-FOR UPDATE 
-USING (auth.uid() = user_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'api_keys' AND policyname = 'Users can update their own API keys') THEN
+    CREATE POLICY "Users can update their own API keys"
+    ON public.api_keys
+    FOR UPDATE
+    USING (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Users can delete their own API keys" 
-ON public.api_keys 
-FOR DELETE 
-USING (auth.uid() = user_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'api_keys' AND policyname = 'Users can delete their own API keys') THEN
+    CREATE POLICY "Users can delete their own API keys"
+    ON public.api_keys
+    FOR DELETE
+    USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Create sms_logs table for tracking sent messages
-CREATE TABLE public.sms_logs (
+CREATE TABLE IF NOT EXISTS public.sms_logs (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   api_key_id UUID REFERENCES public.api_keys(id) ON DELETE SET NULL,
@@ -78,15 +98,22 @@ CREATE TABLE public.sms_logs (
 ALTER TABLE public.sms_logs ENABLE ROW LEVEL SECURITY;
 
 -- SMS logs policies
-CREATE POLICY "Users can view their own SMS logs" 
-ON public.sms_logs 
-FOR SELECT 
-USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'sms_logs' AND policyname = 'Users can view their own SMS logs') THEN
+    CREATE POLICY "Users can view their own SMS logs"
+    ON public.sms_logs
+    FOR SELECT
+    USING (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Users can create their own SMS logs" 
-ON public.sms_logs 
-FOR INSERT 
-WITH CHECK (auth.uid() = user_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'sms_logs' AND policyname = 'Users can create their own SMS logs') THEN
+    CREATE POLICY "Users can create their own SMS logs"
+    ON public.sms_logs
+    FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Create function to update timestamps
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
@@ -98,11 +125,13 @@ END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
 -- Create triggers for automatic timestamp updates
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at
 BEFORE UPDATE ON public.profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_api_keys_updated_at ON public.api_keys;
 CREATE TRIGGER update_api_keys_updated_at
 BEFORE UPDATE ON public.api_keys
 FOR EACH ROW
@@ -122,6 +151,7 @@ END;
 $$;
 
 -- Create trigger for auto-creating profile on signup
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

@@ -12,15 +12,16 @@ Excel-to-SMS sender platform. Users upload Excel files, map columns (phone/name/
 ┌─────────────────────────────────────────────────────────────┐
 │                      مرسال الهدهد (المنصة)                    │
 ├─────────────────────┬───────────────────────────────────────┤
-│  الصفحة الرئيسية     │  لوحة تحكم المستخدم (/dashboard)       │
-│                     │                                        │
-│  • رفع Excel        │  • حملاتي + تفاصيل الحملة              │
-│  • ربط الأعمدة      │  • سجل إرسال SMS                      │
-│  • إرسال SMS        │  • مفاتيح API الخاصة بي               │
-│                     │  • أجهزتي المسجلة                     │
+│  واجهة المستخدم     │  لوحة تحكم المستخدم (/dashboard)       │
+│  (User App)         │                                        │
+│                     │  • حملاتي + تفاصيل الحملة              │
+│  • رفع Excel        │  • سجل إرسال SMS                      │
+│  • ربط الأعمدة      │  • مفاتيح API الخاصة بي               │
+│  • إرسال SMS        │  • أجهزتي المسجلة                     │
 │                     │  • حسابي وإعداداتي                     │
 ├─────────────────────┴───────────────────────────────────────┤
 │              لوحة تحكم المشرف (/super-admin)                 │
+│              (Admin App - منفصل تماماً)                       │
 │                                                               │
 │  • إدارة كل المستخدمين + تفاصيل + حذف/تعطيل                 │
 │  • عرض كل الحملات + سجلات SMS لجميع المستخدمين              │
@@ -29,11 +30,104 @@ Excel-to-SMS sender platform. Users upload Excel files, map columns (phone/name/
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### عزل الواجهات (Interface Isolation)
+
+```
+src/
+├── shared/                    ← مكونات مشتركة بين التطبيقين
+│   ├── components/
+│   │   ├── ui/               (shadcn/ui primitives)
+│   │   ├── CampaignDetail.tsx
+│   │   ├── ConfirmDialog.tsx
+│   │   ├── ErrorBoundary.tsx
+│   │   ├── PasswordInput.tsx
+│   │   ├── Spinner.tsx
+│   │   ├── StatusBadges.tsx
+│   │   └── Pagination.tsx
+│   ├── hooks/
+│   │   ├── useAuth.tsx
+│   │   └── use-toast.ts
+│   ├── lib/
+│   │   ├── formatDate.ts
+│   │   ├── statusData.ts
+│   │   └── utils.ts
+│   ├── types/
+│   │   └── campaign.ts
+│   └── integrations/
+│       └── supabase/
+│           ├── client.ts
+│           └── types.ts
+│
+├── user/                      ← واجهة المستخدم فقط
+│   ├── App.tsx
+│   ├── main.tsx
+│   ├── components/
+│   │   ├── ColumnMapper.tsx
+│   │   ├── DataPreview.tsx
+│   │   ├── FileUploader.tsx
+│   │   ├── SendButton.tsx
+│   │   └── dashboard/
+│   │       ├── DashboardLayout.tsx
+│   │       ├── MyCampaigns.tsx
+│   │       ├── MySmsLogs.tsx
+│   │       ├── MyApiKeys.tsx
+│   │       ├── MyDevices.tsx
+│   │       ├── AccountSettings.tsx
+│   │       └── NewCampaignDialog.tsx
+│   ├── lib/
+│   │   └── columnDetection.ts
+│   └── pages/
+│       ├── Auth.tsx
+│       ├── ResetPassword.tsx
+│       └── NotFound.tsx
+│
+├── admin/                     ← واجهة المشرف فقط (معزولة تماماً)
+│   ├── AdminApp.tsx
+│   ├── main.tsx
+│   ├── AdminAuth.tsx
+│   ├── hooks/
+│   │   └── useIsAdmin.tsx
+│   ├── lib/
+│   │   └── adminActions.ts
+│   └── components/
+│       ├── SuperAdminLayout.tsx
+│       ├── SuperAdminDashboard.tsx
+│       ├── UsersManagement.tsx
+│       ├── UserDetail.tsx
+│       ├── AllCampaigns.tsx
+│       ├── AllSmsLogs.tsx
+│       ├── AllApiKeys.tsx
+│       ├── AllDevices.tsx
+│       ├── RolesManagement.tsx
+│       └── index.ts
+```
+
+### قواعد العزل
+- **كود المشرف** (`src/admin/`) لا يُستورد من تطبيق المستخدم
+- **كود المستخدم** (`src/user/`) لا يُستورد من تطبيق المشرف
+- **المكونات المشتركة** (`src/shared/`) تُستخدم من كلا التطبيقين
+- كل تطبيق له **نقطة دخول منفصلة** و **بناء منفصل** (dist/ vs dist-admin/)
+- **لا توجد مسارات `/super-admin`** في تطبيق المستخدم
+
 ### Route Structure
-- `/` — Main page (upload, map, send)
+- `/` — Main page (redirects to /dashboard)
 - `/auth` — Login / signup / forgot password
+- `/reset-password` — Password reset via email link
 - `/dashboard` — User dashboard (own data only, `DashboardLayout`)
-- `/super-admin` — Super admin panel (all users, `SuperAdminLayout`, requires `super_admin` role)
+  - `/dashboard` — My campaigns
+  - `/dashboard/sms-logs` — SMS logs
+  - `/dashboard/api-keys` — API keys
+  - `/dashboard/devices` — Registered devices
+  - `/dashboard/settings` — Account settings
+- `/super-admin` — Super admin panel (requires `admin` role, separate app)
+  - `/super-admin` — Dashboard overview
+  - `/super-admin/users` — User management
+  - `/super-admin/users/:userId` — User detail
+  - `/super-admin/campaigns` — All campaigns
+  - `/super-admin/logs` — All SMS logs
+  - `/super-admin/api-keys` — All API keys
+  - `/super-admin/devices` — All devices
+  - `/super-admin/roles` — Role management
 - `*` — 404 Not Found
 
 ### Cross-Platform Redirect Flow
@@ -47,28 +141,39 @@ Excel-to-SMS sender platform. Users upload Excel files, map columns (phone/name/
 
 ## Key Files
 
-### Pages & Layouts
+### Entry Points
 | File | Purpose |
 |------|---------|
-| `src/pages/Index.tsx` | Main page: upload Excel, map columns, send + redirect flow |
-| `src/pages/Auth.tsx` | Login / signup / forgot password |
-| `src/pages/NotFound.tsx` | 404 page |
-| `src/components/dashboard/DashboardLayout.tsx` | User dashboard shell (sidebar nav) |
-| `src/components/super-admin/SuperAdminLayout.tsx` | Super admin shell (sidebar nav) |
-| `src/components/ErrorBoundary.tsx` | React error boundary (lazy-loaded routes) |
+| `src/user/main.tsx` | User app React entry point |
+| `src/user/App.tsx` | User app Router + providers |
+| `src/user/index.html` | User app HTML shell (Vite root) |
+| `src/admin/main.tsx` | Admin app React entry point |
+| `src/admin/AdminApp.tsx` | Admin app Router + providers + lazy loading |
+| `src/admin/AdminAuth.tsx` | Admin login page with role check |
+| `src/admin/index.html` | Admin app HTML shell (Vite root) |
 
-### User Dashboard (`src/components/dashboard/`)
+### Pages (User)
 | File | Purpose |
 |------|---------|
+| `src/user/pages/Auth.tsx` | Login / signup / forgot password |
+| `src/user/pages/ResetPassword.tsx` | Password reset via email recovery link |
+| `src/user/pages/NotFound.tsx` | 404 page |
+
+### User Dashboard (`src/user/components/dashboard/`)
+| File | Purpose |
+|------|---------|
+| `DashboardLayout.tsx` | User dashboard shell (sidebar nav) |
 | `MyCampaigns.tsx` | User's campaigns with pagination + detail view |
 | `MySmsLogs.tsx` | User's SMS logs with pagination |
 | `MyApiKeys.tsx` | User's API keys (masked, create/delete) |
 | `MyDevices.tsx` | User's registered devices (remove) |
 | `AccountSettings.tsx` | Update password |
+| `NewCampaignDialog.tsx` | Campaign creation wizard dialog |
 
-### Super Admin (`src/components/super-admin/`)
+### Super Admin (`src/admin/components/`)
 | File | Purpose |
 |------|---------|
+| `SuperAdminLayout.tsx` | Admin shell (sidebar nav) |
 | `SuperAdminDashboard.tsx` | Stats overview (users, campaigns, messages, devices) |
 | `UsersManagement.tsx` | List/search/filter users with pagination |
 | `UserDetail.tsx` | Full user detail (profile, API keys, devices, campaigns, logs) |
@@ -82,19 +187,27 @@ Excel-to-SMS sender platform. Users upload Excel files, map columns (phone/name/
 ### Shared Components
 | File | Purpose |
 |------|---------|
-| `src/components/ColumnMapper.tsx` | Auto-detect + manual column mapping |
-| `src/lib/columnDetection.ts` | Column type detection utilities + ColumnMapping type |
-| `src/components/RateLimitDisplay.tsx` | Hourly/daily rate limit usage with progress bars |
-| `src/components/FileUploader.tsx` | Drag-and-drop Excel upload (MIME validated) |
-| `src/components/SendButton.tsx` | Send button + loading state |
-| `src/components/SendHistory.tsx` | Campaign history with Realtime updates |
-| `src/components/LinkedAccounts.tsx` | Manage cross-platform linked accounts |
-| `src/components/SettingsDialog.tsx` | API key + password + linked accounts management |
-| `src/components/Pagination.tsx` | Reusable pagination (pageSize=50) |
-| `src/components/ConfirmDialog.tsx` | Replaces window.confirm() |
-| `src/components/Spinner.tsx` | Loading spinner with Arabic label |
-| `src/hooks/useRealtimeCampaigns.ts` | Realtime subscription (channel name includes user.id) |
-| `src/lib/formatDate.ts` | Locale-aware date formatting |
+| `src/shared/components/CampaignDetail.tsx` | Campaign detail dialog (has `adminMode` prop) |
+| `src/shared/components/ConfirmDialog.tsx` | Reusable confirmation dialog |
+| `src/shared/components/ErrorBoundary.tsx` | React error boundary |
+| `src/shared/components/Pagination.tsx` | Reusable pagination (pageSize=50) |
+| `src/shared/components/PasswordInput.tsx` | Password field with show/hide toggle |
+| `src/shared/components/Spinner.tsx` | Loading spinner with Arabic label |
+| `src/shared/components/StatusBadges.tsx` | Campaign/message status badges + icons |
+| `src/shared/components/ui/*` | shadcn/ui primitives (button, card, dialog, etc.) |
+| `src/shared/hooks/useAuth.tsx` | Auth context provider + useAuth hook |
+| `src/shared/hooks/use-toast.ts` | Toast hook |
+| `src/shared/lib/formatDate.ts` | Locale-aware date formatting |
+| `src/shared/lib/statusData.ts` | Status label/variant mappings |
+| `src/shared/lib/utils.ts` | `cn()` utility for Tailwind class merging |
+| `src/shared/types/campaign.ts` | CampaignInfo, CampaignMessage interfaces |
+| `src/shared/integrations/supabase/client.ts` | Supabase client |
+| `src/shared/integrations/supabase/types.ts` | DB type definitions |
+| `src/user/components/ColumnMapper.tsx` | Auto-detect + manual column mapping |
+| `src/user/components/DataPreview.tsx` | Excel data preview table |
+| `src/user/components/FileUploader.tsx` | Drag-and-drop Excel upload (MIME validated) |
+| `src/user/components/SendButton.tsx` | Send button + loading state |
+| `src/user/lib/columnDetection.ts` | Column type detection utilities + ColumnMapping type |
 
 ### Edge Functions (`supabase/functions/`)
 | Function | Purpose |
@@ -107,7 +220,7 @@ Excel-to-SMS sender platform. Users upload Excel files, map columns (phone/name/
 | `admin-manage-users/index.ts` | GET/PUT/DELETE users (admin-only, LIKE-safe search) |
 | `manage-user-links/index.ts` | GET/DELETE linked accounts |
 | `cleanup-old-data/index.ts` | Scheduled data cleanup |
-| `create-admin/index.ts` | Creates super_admin user |
+| `create-admin/index.ts` | Creates admin user |
 | `_shared/cors.ts` | Dynamic CORS (per-request origin check, supports GET/DELETE/OPTIONS) |
 
 ### Database (`supabase/migrations/`)
@@ -128,8 +241,10 @@ Excel-to-SMS sender platform. Users upload Excel files, map columns (phone/name/
 ## Commands
 
 ```bash
-npm run dev          # Start Vite dev server (main app, port 5180)
-npm run build        # Build for production
+npm run dev          # Start Vite dev server (user app, port 5180)
+npm run dev:admin    # Start Vite dev server (admin app, port 5181)
+npm run build        # Build user app for production (dist/)
+npm run build:admin  # Build admin app for production (dist-admin/)
 npm run lint         # Run ESLint
 npm run deploy:db    # Push all pending migrations to Supabase
 npm run deploy:functions  # Deploy all Edge Functions
@@ -139,8 +254,8 @@ npm run deploy:all   # Deploy DB + all Edge Functions
 ## Code Conventions
 
 - Arabic-first UI (RTL layout, Arabic labels)
-- Supabase client from `src/integrations/supabase/client.ts`
-- Types from `src/integrations/supabase/types.ts`
+- Supabase client from `src/shared/integrations/supabase/client.ts`
+- Types from `src/shared/integrations/supabase/types.ts`
 - Toast notifications via `sonner`
 - Phone validation: 9-15 digits, cleaned before send
 - No `console.log` in production code
@@ -157,6 +272,8 @@ Key tables: `api_keys`, `sms_logs`, `profiles`, `user_roles`, `rate_limits`, `ca
 
 ## Security Notes
 
+- **Interface isolation**: Admin UI and user UI are completely separate Vite builds
+- Admin role is `admin` in DB enum (not `super_admin`)
 - API keys masked in UI (only last 8 chars shown)
 - Rate limits: 1,000/request, 5,000/hour, 10,000/day (DB-based via `check_rate_limit_and_increment`)
 - All times in UTC
@@ -169,9 +286,10 @@ Key tables: `api_keys`, `sms_logs`, `profiles`, `user_roles`, `rate_limits`, `ca
 - `register-device` validates: device_id ≤ 255 chars, platform ∈ {android, ios}
 - `auto_confirm_email()` has `SET search_path = public`
 - `admin-manage-users` escapes `%` and `_` in ILIKE search
-- Super admin routes require `super_admin` role in `user_roles` table
+- Super admin routes require `admin` role in `user_roles` table
 - DB constraints: `rate_limits.messages_sent >= 0`, `sms_logs.status IN (...)`
 - Triggers: device count limit (5/user), campaign message count auto-update
+- Admin app runs on separate port/build — no admin code in user bundle
 
 ## ⚠️ Setup Required
 

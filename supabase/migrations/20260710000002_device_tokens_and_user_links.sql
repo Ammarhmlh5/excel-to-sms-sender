@@ -15,9 +15,9 @@ CREATE TABLE IF NOT EXISTS device_push_tokens (
   UNIQUE(user_id, device_id)
 );
 
-CREATE INDEX idx_device_tokens_user ON device_push_tokens(user_id);
-CREATE INDEX idx_device_tokens_device ON device_push_tokens(device_id);
-CREATE INDEX idx_device_tokens_active ON device_push_tokens(is_active);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_push_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_device ON device_push_tokens(device_id);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_active ON device_push_tokens(is_active);
 
 -- User links: cross-platform identity linking
 CREATE TABLE IF NOT EXISTS user_links (
@@ -32,36 +32,53 @@ CREATE TABLE IF NOT EXISTS user_links (
   UNIQUE(local_user_id, external_platform)
 );
 
-CREATE INDEX idx_user_links_local ON user_links(local_user_id);
-CREATE INDEX idx_user_links_external ON user_links(external_platform, external_user_id);
+CREATE INDEX IF NOT EXISTS idx_user_links_local ON user_links(local_user_id);
+CREATE INDEX IF NOT EXISTS idx_user_links_external ON user_links(external_platform, external_user_id);
 
 -- Enable RLS
 ALTER TABLE device_push_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_links ENABLE ROW LEVEL SECURITY;
 
 -- RLS: device tokens
-CREATE POLICY "Users view own device tokens"
-  ON device_push_tokens FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'device_push_tokens' AND policyname = 'Users view own device tokens') THEN
+    CREATE POLICY "Users view own device tokens"
+      ON device_push_tokens FOR SELECT
+      USING (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Service role manages device tokens"
-  ON device_push_tokens FOR INSERT
-  WITH CHECK (true);  -- service role can insert
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'device_push_tokens' AND policyname = 'Service role manages device tokens') THEN
+    CREATE POLICY "Service role manages device tokens"
+      ON device_push_tokens FOR INSERT
+      WITH CHECK (true);
+  END IF;
 
-CREATE POLICY "Users update own device tokens"
-  ON device_push_tokens FOR UPDATE
-  USING (auth.uid() = user_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'device_push_tokens' AND policyname = 'Users update own device tokens') THEN
+    CREATE POLICY "Users update own device tokens"
+      ON device_push_tokens FOR UPDATE
+      USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- RLS: user links
-CREATE POLICY "Users view own links"
-  ON user_links FOR SELECT
-  USING (auth.uid() = local_user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_links' AND policyname = 'Users view own links') THEN
+    CREATE POLICY "Users view own links"
+      ON user_links FOR SELECT
+      USING (auth.uid() = local_user_id);
+  END IF;
 
-CREATE POLICY "Users insert own links"
-  ON user_links FOR INSERT
-  WITH CHECK (auth.uid() = local_user_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_links' AND policyname = 'Users insert own links') THEN
+    CREATE POLICY "Users insert own links"
+      ON user_links FOR INSERT
+      WITH CHECK (auth.uid() = local_user_id);
+  END IF;
+END $$;
 
 -- Trigger: auto-update updated_at on device_push_tokens
+DROP TRIGGER IF EXISTS update_device_tokens_updated_at ON device_push_tokens;
 CREATE TRIGGER update_device_tokens_updated_at
   BEFORE UPDATE ON device_push_tokens
   FOR EACH ROW

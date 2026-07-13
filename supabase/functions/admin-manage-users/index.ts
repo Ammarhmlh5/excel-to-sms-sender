@@ -84,7 +84,7 @@ serve(async (req) => {
 
         let fetchQuery = adminClient
           .from('profiles')
-          .select('*, user_roles(role)')
+          .select('*')
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
 
@@ -99,10 +99,34 @@ serve(async (req) => {
           fetchQuery,
         ]);
 
-        if (error) throw error;
+        if (error) {
+          console.error('list_users profiles error:', JSON.stringify(error));
+          throw error;
+        }
+
+        const userIds = (profiles || []).map(p => p.user_id);
+
+        const rolesMap: Record<string, string[]> = {};
+        if (userIds.length > 0) {
+          const { data: roles } = await adminClient
+            .from('user_roles')
+            .select('user_id, role')
+            .in('user_id', userIds);
+          if (roles) {
+            for (const r of roles) {
+              if (!rolesMap[r.user_id]) rolesMap[r.user_id] = [];
+              rolesMap[r.user_id].push(r.role);
+            }
+          }
+        }
+
+        const usersWithRoles = (profiles || []).map(p => ({
+          ...p,
+          user_roles: (rolesMap[p.user_id] || []).map(role => ({ role })),
+        }));
 
         return new Response(
-          JSON.stringify({ users: profiles || [], total: count || 0, page, limit }),
+          JSON.stringify({ users: usersWithRoles, total: count || 0, page, limit }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -461,9 +485,9 @@ serve(async (req) => {
     }
 
   } catch (error) {
-    console.error('admin-manage-users error:', error instanceof Error ? error.message : error);
+    console.error('admin-manage-users error:', error instanceof Error ? error.message : String(error));
     return new Response(
-      JSON.stringify({ error: 'حدث خطأ غير متوقع في خدمة الإدارة' }),
+      JSON.stringify({ error: 'حدث خطأ غير متوقع في خدمة الإدارة', details: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

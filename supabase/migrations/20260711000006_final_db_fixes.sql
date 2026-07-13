@@ -23,9 +23,19 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 2. إضافة FK على rate_limits.user_id
 --    يمنع صفوف يتيمة بعد حذف المستخدم
-ALTER TABLE public.rate_limits
-  ADD CONSTRAINT rate_limits_user_id_fkey
-  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.rate_limits'::regclass
+      AND conname = 'rate_limits_user_id_fkey'
+  ) THEN
+    ALTER TABLE public.rate_limits
+      ADD CONSTRAINT rate_limits_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 -- 3. إضافة index على sms_logs.user_id
 CREATE INDEX IF NOT EXISTS idx_sms_logs_user_id ON public.sms_logs(user_id);

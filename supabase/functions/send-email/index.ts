@@ -11,6 +11,7 @@ interface EmailMessage {
 interface RequestBody {
   messages: EmailMessage[];
   campaign_name?: string;
+  campaign_id?: string;
 }
 
 const RATE_LIMITS = {
@@ -146,44 +147,126 @@ serve(async (req) => {
       );
     }
 
-    // STEP 1: حفظ الحملة في قاعدة البيانات
+    // STEP 1: reuse a pre-saved campaign when present, otherwise create one here.
     const campaignName = campaign_name || `حملة بريد - ${validMessages.length} رسالة`;
-    const { data: newCampaign, error: campError } = await adminClient
-      .from("campaigns")
-      .insert({
-        user_id: user.id,
-        name: campaignName,
-        status: "sending",
-        contacts_count: validMessages.length,
-        source: "excel_upload",
-      })
-      .select("id")
-      .single();
+    let activeCampaignId: string | null = null;
 
-    if (campError || !newCampaign) {
+    if (body.campaign_id) {
+      const { data: ownership } = await adminClient
+        .from("campaigns")
+        .select("id")
+        .eq("id", body.campaign_id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (!ownership) {
+        return new Response(
+          JSON.stringify({ error: "الحملة غير موجودة أو لا تملك صلاحية الوصول" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      activeCampaignId = ownership.id;
+    } else {
+      const { data: newCampaign, error: campError } = await adminClient
+        .from("campaigns")
+        .insert({
+          user_id: user.id,
+          name: campaignName,
+          status: "sending",
+          contacts_count: validMessages.length,
+          source: "excel_upload",
+        })
+        .select("id")
+        .single();
+
+      if (campError || !newCampaign) {
+        return new Response(
+          JSON.stringify({ error: "فشل إنشاء الحملة في قاعدة البيانات" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      activeCampaignId = newCampaign.id;
+    }
+
+    // STEP 2: save messages only when the campaign was created in this function.
+    if (!body.campaign_id) {
+      const campaignMessages = validMessages.map((msg) => ({
+        campaign_id: activeCampaignId!,
+        phone: msg.phone,
+        name: msg.name || null,
+        message: msg.message,
+        status: "pending" as const,
+      }));
+
+      const { error: insertMsgsError } = await adminClient
+        .from("campaign_messages")
+        .insert(campaignMessages);
+
+      if (insertMsgsError) {
+        console.error("Failed to insert campaign messages:", insertMsgsError.message);
+      }
+    }
+
+    await adminClient
+      .from("campaigns")
+      .update({ status: "sending", updated_at: new Date().toISOString() })
+      .eq("id", activeCampaignId);
+
+    const { data: campaignMessagesRows, error: campaignMessagesRowsError } = await adminClient
+      .from("campaign_messages")
+      .select("id")
+      .eq("campaign_id", activeCampaignId)
+      .order("created_at", { ascending: true });
+
+    if (campaignMessagesRowsError) {
       return new Response(
-        JSON.stringify({ error: "فشل إنشاء الحملة في قاعدة البيانات" }),
+        JSON.stringify({ error: "فشل قراءة رسائل الحملة" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const activeCampaignId = newCampaign.id;
+    const deliveryAttemptsPayload = validMessages
+      .map((_, index) => {
+        const row = campaignMessagesRows?.[index];
+        if (!row) return null;
+        return {
+          campaign_message_id: row.id,
+          provider: "resend",
+          channel: "email",
+          status: "queued",
+          attempts: 0,
+        };
+      })
+      .filter((item): item is { campaign_message_id: string; provider: string; channel: string; status: string; attempts: number } => Boolean(item));
 
-    // STEP 2: حفظ الرسائل في قاعدة البيانات
-    const campaignMessages = validMessages.map((msg) => ({
-      campaign_id: activeCampaignId,
-      phone: msg.phone,
-      name: msg.name || null,
-      message: msg.message,
-      status: "pending" as const,
-    }));
+    let attemptIds: string[] = [];
+    if (deliveryAttemptsPayload.length > 0) {
+      const { data: insertedAttempts, error: attemptsError } = await adminClient
+        .from("delivery_attempts")
+        .insert(deliveryAttemptsPayload)
+        .select("id");
 
-    const { error: insertMsgsError } = await adminClient
-      .from("campaign_messages")
-      .insert(campaignMessages);
+      if (attemptsError) {
+        return new Response(
+          JSON.stringify({ error: "فشل تسجيل محاولات الإرسال" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-    if (insertMsgsError) {
-      console.error("Failed to insert campaign messages:", insertMsgsError.message);
+      attemptIds = (insertedAttempts || []).map((attempt) => attempt.id);
+      await adminClient
+        .from("delivery_attempts")
+        .update({ status: "sending", attempts: 1 })
+        .in("id", attemptIds);
+
+      await adminClient
+        .from("delivery_events")
+        .insert(attemptIds.map((attemptId) => ({
+          delivery_attempt_id: attemptId,
+          event_type: "dispatch_started",
+          event_data: { channel: "email", provider: "resend" },
+        })));
     }
 
     // STEP 3: إرسال البريد الإلكتروني عبر Resend
@@ -260,6 +343,8 @@ ${messagesText}
       })
       .eq("id", activeCampaignId);
 
+    const messageIds = (campaignMessagesRows || []).slice(0, validMessages.length).map((row) => row.id);
+
     await adminClient
       .from("campaign_messages")
       .update({
@@ -267,8 +352,26 @@ ${messagesText}
         sent_at: emailSuccess ? new Date().toISOString() : undefined,
         error: emailSuccess ? undefined : (resendResult.message as string) || "فشل إرسال البريد",
       })
-      .eq("campaign_id", activeCampaignId)
-      .eq("status", "pending");
+      .in("id", messageIds);
+
+    if (attemptIds.length > 0) {
+      await adminClient
+        .from("delivery_attempts")
+        .update({
+          status: emailSuccess ? "sent" : "failed",
+          response_data: resendResult,
+          error_message: emailSuccess ? null : ((resendResult.message as string) || "فشل إرسال البريد"),
+        })
+        .in("id", attemptIds);
+
+      await adminClient
+        .from("delivery_events")
+        .insert(attemptIds.map((attemptId) => ({
+          delivery_attempt_id: attemptId,
+          event_type: emailSuccess ? "sent" : "failed",
+          event_data: resendResult,
+        })));
+    }
 
     if (!emailSuccess) {
       return new Response(
