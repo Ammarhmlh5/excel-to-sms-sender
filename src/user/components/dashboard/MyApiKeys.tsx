@@ -113,14 +113,16 @@ export function MyApiKeys() {
         is_active: true,
       });
 
+    setIsCreating(false);
+
     if (error) {
-      toast.error('فشل إنشاء المفتاح');
+      toast.error(error.message || 'فشل إنشاء المفتاح');
     } else {
       toast.success('تم إنشاء المفتاح بنجاح');
       setNewKeyName('');
+      setCreateConfirmOpen(false);
       fetchKeys();
     }
-    setIsCreating(false);
   };
 
   const handleDeleteKey = async () => {
@@ -399,6 +401,8 @@ export function MyApiKeys() {
       title="إنشاء مفتاح جديد"
       description={`هل تريد إنشاء مفتاح جديد باسم "${newKeyName.trim()}"؟`}
       onConfirm={handleCreateKey}
+      loading={isCreating}
+      variant="default"
     />
     </>
   );
