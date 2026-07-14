@@ -31,6 +31,13 @@ iwr https://deno.land/install.ps1 -useb | iex
 deno test supabase/functions/_shared/providers --allow-net --allow-env --unstable
 ```
 
+3. لتشغيل اختبار نهاية إلى نهاية لمحاكاة Webhook Hudhud:
+```powershell
+npm run e2e:webhook-test -- --url https://jqilueudbhgcgskvkvhe.supabase.co --key service_role_xxx
+```
+
+> ملاحظة: هذا السكربت ينشئ حملة ورسالة اختبارية، ثم يرسل أحداث `accepted` و `delivered` إلى دالة `webhook-provider` ويعرض الحالة النهائية من `delivery_attempts`, `campaign_messages`, و `campaigns`.
+
 > ملاحظة: بعض الاختبارات تعتمد على محاكاة `fetch` ولا تحتاج لمفتاح، بينما اختبار التكامل الحقيقي سيتخطى ما لم يتم تعيين `HUDHUD_API_KEY` في البيئة.
 
 ## تشغيل دوال Supabase محليًا
