@@ -6,6 +6,7 @@ import Pagination from '@/shared/components/Pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/shared/components/ui/table';
 import { formatDate } from '@/shared/lib/formatDate';
 import { Button } from '@/shared/components/ui/button';
+import { ConfirmDialog } from '@/shared/components/ConfirmDialog';
 
 interface DeadLetter {
   id: string;
@@ -14,7 +15,7 @@ interface DeadLetter {
   provider?: string;
   channel?: string;
   error_message?: string;
-  response_data?: any;
+  response_data?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -26,6 +27,10 @@ export function DeadLetters() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [requeueConfirmOpen, setRequeueConfirmOpen] = useState(false);
+  const [requeueTarget, setRequeueTarget] = useState<string | null>(null);
+  const [bulkRequeueConfirmOpen, setBulkRequeueConfirmOpen] = useState(false);
+  const [bulkRequeueCount, setBulkRequeueCount] = useState(0);
 
   const fetchDLQ = useCallback(async (p: number) => {
     setLoading(true);
@@ -35,12 +40,11 @@ export function DeadLetters() {
       });
       if (!error && data) {
         setRows(data.data || []);
-        // simple total estimation
         setTotal((p - 1) * PAGE_SIZE + (data.data?.length || 0));
       } else {
         toast.error(error?.message || 'فشل في جلب DLQ');
       }
-    } catch (e) {
+    } catch {
       toast.error('فشل في جلب DLQ');
     } finally {
       setLoading(false);
@@ -50,7 +54,6 @@ export function DeadLetters() {
   useEffect(() => { fetchDLQ(page); }, [page, fetchDLQ]);
 
   const requeue = async (id: string) => {
-    if (!confirm('إعادة إدراج الرسالة إلى قائمة الانتظار؟')) return;
     try {
       const { data, error } = await supabase.functions.invoke('dead-letters', { body: { action: 'requeue', id } });
       if (!error && data) {
@@ -59,8 +62,34 @@ export function DeadLetters() {
       } else {
         toast.error(error?.message || 'فشل إعادة الإدراج');
       }
-    } catch (e) {
+    } catch {
       toast.error('فشل إعادة الإدراج');
+    }
+  };
+
+  const handleRequeueConfirm = () => {
+    setRequeueConfirmOpen(false);
+    if (requeueTarget) {
+      requeue(requeueTarget);
+      setRequeueTarget(null);
+    }
+  };
+
+  const handleBulkRequeueConfirm = async () => {
+    setBulkRequeueConfirmOpen(false);
+    const ids = Object.keys(selected).filter(id => selected[id]);
+    setLoading(true);
+    try {
+      for (const id of ids) {
+        await supabase.functions.invoke('dead-letters', { body: { action: 'requeue', id } });
+      }
+      toast.success('تمت إعادة إدراج العناصر المحددة');
+      setSelected({});
+      fetchDLQ(page);
+    } catch {
+      toast.error('حدث خطأ أثناء إعادة الإدراج');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -90,31 +119,20 @@ export function DeadLetters() {
     URL.revokeObjectURL(url);
   };
 
-  const bulkRequeue = async () => {
+  const bulkRequeue = () => {
     const ids = Object.keys(selected).filter(id => selected[id]);
     if (ids.length === 0) {
       toast.error('لم يتم اختيار أي عنصر لإعادة الإدراج');
       return;
     }
-    if (!confirm(`إعادة إدراج ${ids.length} رسالة إلى قائمة الانتظار؟`)) return;
-    setLoading(true);
-    try {
-      for (const id of ids) {
-        await supabase.functions.invoke('dead-letters', { body: { action: 'requeue', id } });
-      }
-      toast.success('تمت إعادة إدراج العناصر المحددة');
-      setSelected({});
-      fetchDLQ(page);
-    } catch (e) {
-      toast.error('حدث خطأ أثناء إعادة الإدراج');
-    } finally {
-      setLoading(false);
-    }
+    setBulkRequeueCount(ids.length);
+    setBulkRequeueConfirmOpen(true);
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
+    <>
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
@@ -161,7 +179,7 @@ export function DeadLetters() {
                   <TableCell>{formatDate(r.created_at)}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => requeue(r.id)}>إعادة الإدراج</Button>
+                      <Button size="sm" onClick={() => { setRequeueTarget(r.id); setRequeueConfirmOpen(true); }}>إعادة الإدراج</Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -173,5 +191,20 @@ export function DeadLetters() {
 
       <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
+    <ConfirmDialog
+      open={requeueConfirmOpen}
+      onOpenChange={setRequeueConfirmOpen}
+      title="إعادة الإدراج"
+      description="إعادة إدراج الرسالة إلى قائمة الانتظار؟"
+      onConfirm={handleRequeueConfirm}
+    />
+    <ConfirmDialog
+      open={bulkRequeueConfirmOpen}
+      onOpenChange={setBulkRequeueConfirmOpen}
+      title="إعادة إدراج جماعية"
+      description={`إعادة إدراج ${bulkRequeueCount} رسالة إلى قائمة الانتظار؟`}
+      onConfirm={handleBulkRequeueConfirm}
+    />
+    </>
   );
 }

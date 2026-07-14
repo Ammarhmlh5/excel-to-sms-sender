@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { supabase } from '@/shared/integrations/supabase/client';
 import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { FileText, CheckCircle, XCircle, Plus } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import { Spinner } from '@/shared/components/Spinner';
+import Pagination from '@/shared/components/Pagination';
+import { toast } from 'sonner';
 
 interface SmsLog {
   id: string;
@@ -14,6 +17,8 @@ interface SmsLog {
   created_at: string;
 }
 
+const pageSize = 50;
+
 export function MySmsLogs() {
   const { user } = useAuth();
   const [logs, setLogs] = useState<SmsLog[]>([]);
@@ -21,19 +26,14 @@ export function MySmsLogs() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const pageSize = 20;
 
-  useEffect(() => {
-    fetchLogs();
-  }, [user, page, statusFilter]);
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     if (!user) return;
 
     let query = supabase
       .from('sms_logs')
-      .select('*, api_keys!inner(user_id)', { count: 'exact' })
-      .eq('api_keys.user_id', user.id)
+      .select('*', { count: 'exact' })
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
 
@@ -43,12 +43,18 @@ export function MySmsLogs() {
 
     const { data, error, count } = await query;
 
-    if (!error && data) {
-      setLogs(data);
+    if (error) {
+      toast.error('فشل تحميل السجلات');
+    } else {
+      setLogs(data || []);
       setTotalCount(count || 0);
     }
     setLoading(false);
-  };
+  }, [user, page, statusFilter]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { variant: 'default' | 'secondary' | 'destructive'; icon: typeof CheckCircle }> = {
@@ -70,7 +76,7 @@ export function MySmsLogs() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <Spinner size="lg" />
       </div>
     );
   }
@@ -140,29 +146,12 @@ export function MySmsLogs() {
                 </table>
               </div>
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-gray-500">
-                    صفحة {page} من {totalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-                    >
-                      السابق
-                    </button>
-                    <button
-                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-                    >
-                      التالي
-                    </button>
-                  </div>
-                </div>
-              )}
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                className="mt-4"
+              />
             </>
           )}
         </CardContent>

@@ -4,7 +4,7 @@ import { useAuth } from '@/shared/hooks/useAuth';
 import { Button } from '@/shared/components/ui/button';
 import {
   LayoutDashboard, Users, MessageSquare, KeyRound, Shield,
-  LogOut, Menu, X, Smartphone, BarChart3, Home, Archive,
+  LogOut, Menu, X, Smartphone, BarChart3, Home, Archive, Radio,
 } from 'lucide-react';
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { to: '/super-admin/users', icon: Users, label: 'المستخدمون' },
   { to: '/super-admin/campaigns', icon: MessageSquare, label: 'الحملات' },
   { to: '/super-admin/logs', icon: BarChart3, label: 'سجلات الإرسال' },
+  { to: '/super-admin/sending-channels', icon: Radio, label: 'وسائط الإرسال' },
   { to: '/super-admin/api-keys', icon: KeyRound, label: 'مفاتيح API' },
   { to: '/super-admin/devices', icon: Smartphone, label: 'الأجهزة' },
   { to: '/super-admin/roles', icon: Shield, label: 'الصلاحيات' },

@@ -397,12 +397,12 @@ serve(async (req) => {
 
         let fetchQuery = adminClient
           .from('api_keys')
-          .select('*')
+          .select('id, user_id, key_name, is_active, created_at, updated_at')
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
 
         if (search) {
-          const filter = `key_name.ilike.%${search}%,api_key.ilike.%${search}%`;
+          const filter = `key_name.ilike.%${search}%`;
           countQuery = countQuery.or(filter);
           fetchQuery = fetchQuery.or(filter);
         }

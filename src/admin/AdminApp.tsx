@@ -20,6 +20,7 @@ const AllApiKeys = lazy(() => import("./components/AllApiKeys").then(m => ({ def
 const AllDevices = lazy(() => import("./components/AllDevices").then(m => ({ default: m.AllDevices })));
 const RolesManagement = lazy(() => import("./components/RolesManagement").then(m => ({ default: m.RolesManagement })));
 const DeadLetters = lazy(() => import("./components/DeadLetters").then(m => ({ default: m.DeadLetters })));
+const SendingChannelsAdmin = lazy(() => import("./components/SendingChannelsAdmin").then(m => ({ default: m.SendingChannelsAdmin })));
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
@@ -57,6 +58,7 @@ const AdminRoutes = () => (
       <Route path="users/:userId" element={<Suspense fallback={<div className="p-8 text-center text-white">Loading...</div>}><UserDetail /></Suspense>} />
       <Route path="campaigns" element={<Suspense fallback={<div className="p-8 text-center text-white">Loading...</div>}><AllCampaigns /></Suspense>} />
       <Route path="logs" element={<Suspense fallback={<div className="p-8 text-center text-white">Loading...</div>}><AllSmsLogs /></Suspense>} />
+      <Route path="sending-channels" element={<Suspense fallback={<div className="p-8 text-center text-white">Loading...</div>}><SendingChannelsAdmin /></Suspense>} />
       <Route path="api-keys" element={<Suspense fallback={<div className="p-8 text-center text-white">Loading...</div>}><AllApiKeys /></Suspense>} />
       <Route path="devices" element={<Suspense fallback={<div className="p-8 text-center text-white">Loading...</div>}><AllDevices /></Suspense>} />
       <Route path="roles" element={<Suspense fallback={<div className="p-8 text-center text-white">Loading...</div>}><RolesManagement /></Suspense>} />

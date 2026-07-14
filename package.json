@@ -14,12 +14,14 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy:db": "supabase db push",
-    "deploy:functions": "supabase functions deploy send-sms send-email save-campaign retry-sms register-device verify-jwks manage-user-links cleanup-old-data admin-manage-users create-admin dead-letters",
+    "deploy:functions": "supabase functions deploy send-sms send-email save-campaign retry-sms register-device verify-jwks manage-user-links cleanup-old-data admin-manage-users create-admin dead-letters manage-hudhud-settings manage-company-domains webhook-provider",
     "deploy:functions:send-sms": "supabase functions deploy send-sms",
     "deploy:functions:send-email": "supabase functions deploy send-email",
     "deploy:functions:save-campaign": "supabase functions deploy save-campaign",
     "deploy:functions:retry-sms": "supabase functions deploy retry-sms",
-    "deploy:all": "npm run deploy:db && npm run deploy:functions"
+    "deploy:all": "npm run deploy:db && npm run deploy:functions",
+    "set:hudhud": "node scripts/set-hudhud-settings.mjs",
+    "e2e:webhook-test": "node scripts/e2e-hudhud-webhook-test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.14",

@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { getAdapter } from "../_shared/providers/index.ts";
-import { logError, logInfo } from "../_shared/log.ts";
+import { extractProviderReference } from "../_shared/providers/reference-utils.js";
+import { logError } from "../_shared/log.ts";
 
 interface SMSMessage {
   to: string;
@@ -42,6 +43,10 @@ function validateMessage(message: string): { valid: boolean; error?: string; san
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req.headers.get('Origin') || undefined);
+  // Health endpoint for quick checks
+  if (req.method === 'GET') {
+    return new Response(JSON.stringify({ ok: true, name: 'send-sms' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -79,7 +84,7 @@ serve(async (req) => {
     // Get user's API key from database
     const { data: apiKeyData, error: apiKeyError } = await supabase
       .from('api_keys')
-      .select('id, api_key')
+      .select('id')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
@@ -94,7 +99,7 @@ serve(async (req) => {
       );
     }
 
-    if (!apiKeyData || !apiKeyData.api_key) {
+    if (!apiKeyData) {
       return new Response(
         JSON.stringify({ error: 'مفتاح API غير موجود - الرجاء إضافة مفتاح API في الإعدادات' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -323,11 +328,6 @@ serve(async (req) => {
       }
 
       attemptIds = (insertedAttempts || []).map((attempt) => attempt.id);
-      const attemptIdMap = (insertedAttempts || []).reduce((acc: Record<string, string>, a: any) => {
-        if (a.idempotency_key) acc[a.idempotency_key] = a.id;
-        if (a.provider_reference) acc[a.provider_reference] = a.id;
-        return acc;
-      }, {});
       await adminClient
         .from('delivery_attempts')
         .update({ status: 'sending', attempts: 1 })
@@ -343,20 +343,15 @@ serve(async (req) => {
     }
 
     // Call Hudhud API server-side (only to + message — no name)
-    const payload = {
-      api_key: apiKeyData.api_key,
-      messages: validMessages.map(({ to, message }) => ({ to, message })),
-    };
-
     // Select provider adapter (default to hudhud for SMS)
     const providerName = 'hudhud';
-    const adapter = await getAdapter(providerName) as any;
+    const adapter = await getAdapter(providerName) as { send: (messages: Array<{ to: string; message: string }>) => Promise<{ ok: boolean; raw: Record<string, unknown> }> };
 
     let providerResult: { ok: boolean; raw: Record<string, unknown> } = { ok: false, raw: { error: 'no_result' } };
     try {
       providerResult = await adapter.send(validMessages.map(m => ({ to: m.to, message: m.message })));
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (err instanceof Error && err.name === 'AbortError') {
         return new Response(
           JSON.stringify({ error: 'انتهت مهلة الاتصال ببوابة الرسائل' }),
           { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -367,14 +362,35 @@ serve(async (req) => {
     }
 
     const hudhudResult = providerResult.raw;
-    const sentSuccess = providerResult.ok;
+
+    const isDelivered = providerResult.ok && (
+      hudhudResult?.status === 'delivered' ||
+      hudhudResult?.success === true ||
+      String(hudhudResult?.status || '').toLowerCase().includes('delivered') ||
+      String(hudhudResult?.message || '').toLowerCase().includes('delivered')
+    );
+
+    const isQueued = providerResult.ok && !isDelivered && (
+      String(hudhudResult?.status || '').toLowerCase().includes('queued') ||
+      String(hudhudResult?.status || '').toLowerCase().includes('accepted') ||
+      String(hudhudResult?.message || '').toLowerCase().includes('accepted') ||
+      String(hudhudResult?.message || '').toLowerCase().includes('queued')
+    );
+
+    const sentSuccess = isDelivered;
+    const queuedSuccess = !sentSuccess && isQueued;
+
+    const smsStatus = sentSuccess ? 'sent' : queuedSuccess ? 'queued' : 'failed';
+    const campaignStatus = sentSuccess ? 'completed' : queuedSuccess ? 'sending' : 'failed';
+    const campaignSentCount = sentSuccess ? validMessages.length : 0;
+    const campaignFailedCount = queuedSuccess ? 0 : (sentSuccess ? 0 : validMessages.length);
 
     // Log to database
     await adminClient.from('sms_logs').insert({
       user_id: user.id,
       api_key_id: apiKeyData.id,
       recipients_count: validMessages.length,
-      status: sentSuccess ? 'sent' : 'failed',
+      status: smsStatus,
       response_data: hudhudResult,
       message_template: validMessages[0]?.message?.substring(0, 255) || null
     });
@@ -384,9 +400,9 @@ serve(async (req) => {
       await adminClient
         .from('campaigns')
         .update({
-          status: sentSuccess ? 'completed' : 'failed',
-          sent_count: sentSuccess ? validMessages.length : 0,
-          failed_count: sentSuccess ? 0 : validMessages.length,
+          status: campaignStatus,
+          sent_count: campaignSentCount,
+          failed_count: campaignFailedCount,
         })
         .eq('id', activeCampaignId);
 
@@ -396,7 +412,7 @@ serve(async (req) => {
 
       const messageIds = (campaignMessagesRows || []).slice(0, validMessages.length).map((row) => row.id);
 
-      if (messageIds.length > 0) {
+      if (messageIds.length > 0 && !queuedSuccess) {
         await adminClient
           .from('campaign_messages')
           .update(msgUpdate)
@@ -404,26 +420,32 @@ serve(async (req) => {
       }
 
       if (attemptIds.length > 0) {
+        const providerReference = extractProviderReference(hudhudResult) || String(hudhudResult?.request_id || hudhudResult?.messageId || hudhudResult?.idempotencyKey || '');
+        const updatePayload: Record<string, unknown> = {
+          status: sentSuccess ? 'sent' : queuedSuccess ? 'queued' : 'failed',
+          response_data: hudhudResult,
+          error_message: sentSuccess ? null : ((hudhudResult.message as string) || 'فشل الإرسال'),
+        };
+        if (providerReference) {
+          updatePayload.provider_reference = providerReference;
+        }
+
         await adminClient
           .from('delivery_attempts')
-          .update({
-            status: sentSuccess ? 'sent' : 'failed',
-            response_data: hudhudResult,
-            error_message: sentSuccess ? null : ((hudhudResult.message as string) || 'فشل الإرسال'),
-          })
+          .update(updatePayload)
           .in('id', attemptIds);
 
         await adminClient
           .from('delivery_events')
           .insert(attemptIds.map((attemptId) => ({
             delivery_attempt_id: attemptId,
-            event_type: sentSuccess ? 'sent' : 'failed',
+            event_type: sentSuccess ? 'sent' : queuedSuccess ? 'queued' : 'failed',
             event_data: hudhudResult,
           })));
       }
     }
 
-    // Send push notification to mobile devices on success
+    // Send push notification to mobile devices on final sent success
     if (sentSuccess && activeCampaignId) {
       try {
         const { data: devices } = await adminClient
@@ -456,8 +478,8 @@ serve(async (req) => {
       }
     }
 
-    if (!sentSuccess) {
-      const errorMsg = (hudhudResult && (hudhudResult as any).message) || 'فشل في إرسال الرسائل';
+    if (!sentSuccess && !queuedSuccess) {
+      const errorMsg = (hudhudResult && typeof hudhudResult === 'object' && 'message' in hudhudResult ? String(hudhudResult.message || '') : '') || 'فشل في إرسال الرسائل';
       return new Response(
         JSON.stringify({ 
           error: errorMsg,
@@ -470,10 +492,14 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `تم إرسال ${validMessages.length} رسالة بنجاح`,
-        sentCount: validMessages.length,
+        message: queuedSuccess
+          ? `تمت إضافة ${validMessages.length} رسالة إلى قائمة الانتظار وسيتم تتبع حالة التسليم لاحقًا`
+          : `تم إرسال ${validMessages.length} رسالة بنجاح`,
+        sentCount: sentSuccess ? validMessages.length : 0,
+        queuedCount: queuedSuccess ? validMessages.length : 0,
         skippedCount: invalidNumbers.length,
         campaign_id: activeCampaignId,
+        status: queuedSuccess ? 'queued' : 'sent',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

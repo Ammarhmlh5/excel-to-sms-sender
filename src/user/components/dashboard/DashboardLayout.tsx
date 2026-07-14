@@ -12,12 +12,14 @@ import {
   X,
   ChevronLeft,
   Home,
+  Radio,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 
 const navItems = [
   { path: '/dashboard', label: 'حملاتي', icon: Send, exact: true },
   { path: '/dashboard/sms-logs', label: 'سجل الإرسال', icon: FileText, exact: false },
+  { path: '/dashboard/sending-channels', label: 'وسائط الإرسال', icon: Radio, exact: false },
   { path: '/dashboard/api-keys', label: 'مفاتيح API', icon: Key, exact: false },
   { path: '/dashboard/devices', label: 'أجهزةي', icon: Smartphone, exact: false },
   { path: '/dashboard/settings', label: 'الإعدادات', icon: Settings, exact: false },

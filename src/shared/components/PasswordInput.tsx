@@ -7,6 +7,7 @@ interface PasswordInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   name?: string;
+  id?: string;
   autoComplete?: string;
   required?: boolean;
   className?: string;
@@ -17,6 +18,7 @@ export function PasswordInput({
   onChange,
   placeholder = '••••••••',
   name,
+  id,
   autoComplete = 'current-password',
   required = false,
   className = '',
@@ -33,6 +35,7 @@ export function PasswordInput({
         className={`pl-12 h-12 ${className}`}
         dir="ltr"
         name={name}
+        id={id}
         autoComplete={autoComplete}
         required={required}
       />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { supabase } from '@/shared/integrations/supabase/client';
 import { Badge } from '@/shared/components/ui/badge';
@@ -27,11 +27,7 @@ export function MyCampaigns() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [newCampaignOpen, setNewCampaignOpen] = useState(false);
 
-  useEffect(() => {
-    fetchCampaigns();
-  }, [user]);
-
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = useCallback(async () => {
     if (!user) return;
 
     const { data, error } = await supabase
@@ -44,7 +40,11 @@ export function MyCampaigns() {
       setCampaigns(data);
     }
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchCampaigns();
+  }, [fetchCampaigns]);
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof Send }> = {

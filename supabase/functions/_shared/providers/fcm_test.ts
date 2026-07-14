@@ -7,7 +7,7 @@ Deno.test('fcm adapter - no key returns error', async () => {
     Deno.env.delete('FCM_SERVER_KEY');
     const res = await adapter.send([{ to: 'token', message: 'hi' }]);
     assertEquals(res.ok, false);
-    assert(res.raw && (res.raw as any).error === 'no_fcm_key');
+    assert(res.raw && (res.raw as Record<string, unknown>).error === 'no_fcm_key');
   } finally {
     if (originalEnv) Deno.env.set('FCM_SERVER_KEY', originalEnv);
   }

@@ -221,6 +221,7 @@ src/
 | `manage-user-links/index.ts` | GET/DELETE linked accounts |
 | `cleanup-old-data/index.ts` | Scheduled data cleanup |
 | `create-admin/index.ts` | Creates admin user |
+| `verify-api-key/index.ts` | Public API key verification for external platforms (IP rate-limited) |
 | `_shared/cors.ts` | Dynamic CORS (per-request origin check, supports GET/DELETE/OPTIONS) |
 
 ### Database (`supabase/migrations/`)
@@ -290,6 +291,7 @@ Key tables: `api_keys`, `sms_logs`, `profiles`, `user_roles`, `rate_limits`, `ca
 - DB constraints: `rate_limits.messages_sent >= 0`, `sms_logs.status IN (...)`
 - Triggers: device count limit (5/user), campaign message count auto-update
 - Admin app runs on separate port/build — no admin code in user bundle
+- `verify-api-key` is public (no auth), rate limits: 10 requests/hour/IP, returns user info on valid key
 
 ## ⚠️ Setup Required
 

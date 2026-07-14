@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { supabase } from '@/shared/integrations/supabase/client';
 import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
-import { Key, Plus, Trash2, Eye, EyeOff, Copy } from 'lucide-react';
+import { Spinner } from '@/shared/components/Spinner';
+import { Key, Plus, Trash2, Eye, EyeOff, Copy, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog';
 
@@ -25,12 +26,13 @@ export function MyApiKeys() {
   const [isCreating, setIsCreating] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [createConfirmOpen, setCreateConfirmOpen] = useState(false);
+  const [showApiDocs, setShowApiDocs] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchKeys();
-  }, [user]);
-
-  const fetchKeys = async () => {
+  const fetchKeys = useCallback(async () => {
     if (!user) return;
 
     const { data, error } = await supabase
@@ -39,10 +41,50 @@ export function MyApiKeys() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (!error && data) {
-      setKeys(data);
+    if (error) {
+      toast.error('فشل تحميل المفاتيح');
+    } else {
+      setKeys(data || []);
     }
     setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    fetchKeys();
+  }, [fetchKeys]);
+
+  const testApiKey = async (apiKey: string) => {
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      const response = await fetch(`${window.location.origin}/functions/v1/verify-api-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: apiKey }),
+      });
+
+      const data = await response.json();
+
+      if (data.valid) {
+        setTestResult({
+          success: true,
+          message: `صالح - المستخدم: ${data.user?.name || data.user?.email || 'غير معروف'}`,
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: data.error || 'مفتاح غير صالح',
+        });
+      }
+    } catch {
+      setTestResult({
+        success: false,
+        message: 'خطأ في الاتصال بالخادم',
+      });
+    } finally {
+      setTesting(false);
+    }
   };
 
   const generateApiKey = (): string => {
@@ -84,6 +126,7 @@ export function MyApiKeys() {
   const handleDeleteKey = async () => {
     if (!deleteTarget) return;
     setDeleteConfirmOpen(false);
+    setActionLoading(deleteTarget);
 
     const { error } = await supabase
       .from('api_keys')
@@ -97,9 +140,11 @@ export function MyApiKeys() {
       fetchKeys();
     }
     setDeleteTarget(null);
+    setActionLoading(null);
   };
 
   const handleToggleActive = async (keyId: string, currentStatus: boolean) => {
+    setActionLoading(keyId);
     const { error } = await supabase
       .from('api_keys')
       .update({ is_active: !currentStatus })
@@ -110,6 +155,7 @@ export function MyApiKeys() {
     } else {
       fetchKeys();
     }
+    setActionLoading(null);
   };
 
   const copyToClipboard = async (text: string) => {
@@ -141,7 +187,7 @@ export function MyApiKeys() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <Spinner size="lg" />
       </div>
     );
   }
@@ -174,7 +220,7 @@ export function MyApiKeys() {
               dir="rtl"
             />
             <Button
-              onClick={handleCreateKey}
+              onClick={() => setCreateConfirmOpen(true)}
               disabled={!newKeyName.trim() || isCreating}
             >
               <Plus className="w-4 h-4 ml-2" />
@@ -182,6 +228,77 @@ export function MyApiKeys() {
             </Button>
           </div>
         </CardContent>
+      </Card>
+
+      <Card>
+        <button
+          onClick={() => setShowApiDocs(!showApiDocs)}
+          className="w-full flex items-center justify-between p-4 text-right hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-2">
+            <ExternalLink className="w-4 h-4 text-blue-600" />
+            <span className="font-medium text-gray-900">ربط الحساب مع منصات أخرى</span>
+          </div>
+          {showApiDocs ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        {showApiDocs && (
+          <CardContent className="pt-0">
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3 text-sm" dir="ltr">
+              <p className="text-gray-700 font-medium">استخدم المفتاح للتحقق من الحساب عبر API:</p>
+
+              <div className="bg-white rounded border p-3">
+                <p className="text-xs text-gray-500 mb-1">Endpoint</p>
+                <code className="text-sm text-blue-700 break-all">
+                  POST {window.location.origin}/functions/v1/verify-api-key
+                </code>
+              </div>
+
+              <div className="bg-white rounded border p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs text-gray-500">curl</p>
+                  <button
+                    onClick={() => copyToClipboard(`curl -X POST ${window.location.origin}/functions/v1/verify-api-key -H "Content-Type: application/json" -d '{"api_key": "YOUR_API_KEY"}'`)}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    نسخ
+                  </button>
+                </div>
+                <pre className="text-xs text-gray-800 overflow-x-auto whitespace-pre-wrap break-all">{`curl -X POST ${window.location.origin}/functions/v1/verify-api-key \\
+  -H "Content-Type: application/json" \\
+  -d '{"api_key": "YOUR_API_KEY"}'`}</pre>
+              </div>
+
+              <div className="bg-white rounded border p-3">
+                <p className="text-xs text-gray-500 mb-1">Response (200)</p>
+                <pre className="text-xs text-gray-800 overflow-x-auto">{`{
+  "valid": true,
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "name": "الاسم"
+  },
+  "key": {
+    "id": "uuid",
+    "name": "اسم المفتاح"
+  }
+}`}</pre>
+              </div>
+
+              <div className="bg-white rounded border p-3">
+                <p className="text-xs text-gray-500 mb-1">أكواد الاستجابة</p>
+                <div className="space-y-1 text-xs">
+                  <p><span className="text-green-600 font-mono">200</span> — مفتاح صالح</p>
+                  <p><span className="text-red-600 font-mono">400</span> — بيانات ناقصة</p>
+                  <p><span className="text-red-600 font-mono">401</span> — مفتاح غير صالح</p>
+                  <p><span className="text-red-600 font-mono">403</span> — مفتاح معطل</p>
+                  <p><span className="text-red-600 font-mono">429</span> — تجاوز الحد المسموح</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400">الحد المسموح: 10 طلبات/ساعة لكل عنوان IP</p>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       <Card>
@@ -234,21 +351,36 @@ export function MyApiKeys() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleToggleActive(key.id, key.is_active)}
+                      onClick={() => testApiKey(key.api_key)}
+                      disabled={testing || actionLoading === key.id}
                     >
-                      {key.is_active ? 'تعطيل' : 'تفعيل'}
+                      {testing ? '...' : 'اختبار'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleToggleActive(key.id, key.is_active)}
+                      disabled={actionLoading === key.id}
+                    >
+                      {actionLoading === key.id ? '...' : key.is_active ? 'تعطيل' : 'تفعيل'}
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => { setDeleteTarget(key.id); setDeleteConfirmOpen(true); }}
                       className="text-red-600 hover:text-red-700"
+                      disabled={actionLoading === key.id}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+          {testResult && (
+            <div className={`mt-4 p-3 rounded text-sm ${testResult.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              {testResult.message}
             </div>
           )}
         </CardContent>
@@ -260,6 +392,13 @@ export function MyApiKeys() {
       title="حذف المفتاح"
       description="هل أنت متأكد من حذف هذا المفتاح؟"
       onConfirm={handleDeleteKey}
+    />
+    <ConfirmDialog
+      open={createConfirmOpen}
+      onOpenChange={setCreateConfirmOpen}
+      title="إنشاء مفتاح جديد"
+      description={`هل تريد إنشاء مفتاح جديد باسم "${newKeyName.trim()}"؟`}
+      onConfirm={handleCreateKey}
     />
     </>
   );

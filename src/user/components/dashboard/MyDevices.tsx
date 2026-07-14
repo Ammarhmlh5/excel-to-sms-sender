@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { supabase } from '@/shared/integrations/supabase/client';
 import { Badge } from '@/shared/components/ui/badge';
@@ -25,11 +25,7 @@ export function MyDevices() {
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDevices();
-  }, [user]);
-
-  const fetchDevices = async () => {
+  const fetchDevices = useCallback(async () => {
     if (!user) return;
 
     const { data, error } = await supabase
@@ -42,7 +38,11 @@ export function MyDevices() {
       setDevices(data);
     }
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchDevices();
+  }, [fetchDevices]);
 
   const handleRemoveDevice = async () => {
     if (!removeTarget) return;

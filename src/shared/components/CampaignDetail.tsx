@@ -148,7 +148,7 @@ export default function CampaignDetail({ campaign, open, onOpenChange, onDelete,
         channelRef.current = null;
       }
     };
-  }, [open, campaign, fetchMessages, fetchStatusCounts]);
+  }, [open, campaign, fetchMessages, fetchStatusCounts, fetchDeliverySummary]);
 
   const handleFilterChange = (filter: string) => {
     setStatusFilter(filter);

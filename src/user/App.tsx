@@ -16,6 +16,7 @@ import { MySmsLogs } from "./components/dashboard/MySmsLogs";
 import { MyApiKeys } from "./components/dashboard/MyApiKeys";
 import { MyDevices } from "./components/dashboard/MyDevices";
 import { AccountSettings } from "./components/dashboard/AccountSettings";
+import { SendingChannels } from "./components/dashboard/SendingChannels";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -51,6 +52,7 @@ const AppRoutes = () => (
     >
       <Route index element={<MyCampaigns />} />
       <Route path="sms-logs" element={<MySmsLogs />} />
+      <Route path="sending-channels" element={<SendingChannels />} />
       <Route path="api-keys" element={<MyApiKeys />} />
       <Route path="devices" element={<MyDevices />} />
       <Route path="settings" element={<AccountSettings />} />
