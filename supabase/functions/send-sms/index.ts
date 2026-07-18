@@ -84,7 +84,7 @@ serve(async (req) => {
     // Get user's API key from database
     const { data: apiKeyData, error: apiKeyError } = await supabase
       .from('api_keys')
-      .select('id')
+      .select('id, api_key, key_name')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
