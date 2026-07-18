@@ -18,12 +18,15 @@ export function getAdapter(name: string): ProviderAdapter {
     return {
       async send(messages: ProviderMessage[], meta?: Record<string, unknown>) {
         const hudhudConfig = await getHudhudConfigFromEnv();
-        if (!hudhudConfig.apiKey) {
+        const apiKey = (typeof meta?.api_key === 'string' && meta.api_key.trim())
+          ? String(meta.api_key).trim()
+          : hudhudConfig.apiKey;
+        if (!apiKey) {
           return {
             ok: false,
             raw: {
               error: 'missing_provider_api_key',
-              message: 'Hudhud API key is not configured in environment variables or hudhud_settings',
+              message: 'مفتاح API الخاص بمنصة الهدهد غير موجود. الرجاء إضافته من الإعدادات.',
             },
           };
         }
@@ -31,7 +34,7 @@ export function getAdapter(name: string): ProviderAdapter {
         const senderId = typeof meta?.sender_id === 'string' ? meta.sender_id : hudhudConfig.senderId || '';
         const baseUrl = typeof meta?.base_url === 'string' ? meta.base_url : hudhudConfig.baseUrl || '';
         const res = await sendToHudhud({
-          apiKey: hudhudConfig.apiKey,
+          apiKey,
           messages: messages.map(message => ({
             to: message.to,
             message: message.message,
@@ -40,7 +43,13 @@ export function getAdapter(name: string): ProviderAdapter {
           ...(senderId ? { senderId } : {}),
           ...(baseUrl ? { baseUrl } : {}),
         });
-        return { ok: res.response.ok, raw: res.body || {} };
+        return {
+          ok: res.response.ok,
+          raw: {
+            ...(res.body || {}),
+            _http_status: res.response.status,
+          },
+        };
       }
     };
   }
