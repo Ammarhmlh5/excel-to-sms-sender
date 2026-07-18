@@ -136,6 +136,91 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_attempts: {
+        Row: {
+          attempts: number
+          campaign_message_id: string
+          channel: string
+          created_at: string
+          error_message: string | null
+          id: string
+          idempotency_key: string | null
+          provider: string
+          provider_reference: string | null
+          response_data: Json | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          campaign_message_id: string
+          channel?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          provider?: string
+          provider_reference?: string | null
+          response_data?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          campaign_message_id?: string
+          channel?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          provider?: string
+          provider_reference?: string | null
+          response_data?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_attempts_campaign_message_id_fkey"
+            columns: ["campaign_message_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_events: {
+        Row: {
+          created_at: string
+          delivery_attempt_id: string
+          event_data: Json | null
+          event_type: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_attempt_id: string
+          event_data?: Json | null
+          event_type: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_attempt_id?: string
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_events_delivery_attempt_id_fkey"
+            columns: ["delivery_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_attempts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       device_push_tokens: {
         Row: {
           app_version: string | null
