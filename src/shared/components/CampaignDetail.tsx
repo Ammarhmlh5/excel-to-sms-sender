@@ -65,13 +65,13 @@ export default function CampaignDetail({ campaign, open, onOpenChange, onDelete,
   }, []);
 
   const fetchDeliverySummary = useCallback(async (campaignId: string) => {
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from('delivery_attempts')
       .select('status, campaign_message_id')
       .in('campaign_message_id', (await supabase.from('campaign_messages').select('id').eq('campaign_id', campaignId)).data?.map((item) => item.id) || []);
 
     if (data) {
-      const summary = data.reduce((acc, item) => {
+      const summary = data.reduce((acc: { sent: number; failed: number; pending: number }, item: { status: string }) => {
         if (item.status === 'sent') acc.sent += 1;
         else if (item.status === 'failed') acc.failed += 1;
         else acc.pending += 1;
