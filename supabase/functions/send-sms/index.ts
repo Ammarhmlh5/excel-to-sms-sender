@@ -345,11 +345,17 @@ serve(async (req) => {
     // Call Hudhud API server-side (only to + message — no name)
     // Select provider adapter (default to hudhud for SMS)
     const providerName = 'hudhud';
-    const adapter = await getAdapter(providerName) as { send: (messages: Array<{ to: string; message: string }>) => Promise<{ ok: boolean; raw: Record<string, unknown> }> };
+    const adapter = await getAdapter(providerName) as { send: (messages: Array<{ to: string; message: string }>, meta?: Record<string, unknown>) => Promise<{ ok: boolean; raw: Record<string, unknown> }> };
 
     let providerResult: { ok: boolean; raw: Record<string, unknown> } = { ok: false, raw: { error: 'no_result' } };
     try {
-      providerResult = await adapter.send(validMessages.map(m => ({ to: m.to, message: m.message })));
+      providerResult = await adapter.send(
+        validMessages.map(m => ({ to: m.to, message: m.message })),
+        {
+          api_key: (apiKeyData as { api_key?: string }).api_key || '',
+          sender_id: (apiKeyData as { key_name?: string }).key_name || '',
+        }
+      );
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         return new Response(
