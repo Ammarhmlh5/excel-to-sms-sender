@@ -11,6 +11,7 @@ interface PasswordInputProps {
   autoComplete?: string;
   required?: boolean;
   className?: string;
+  dir?: string;
 }
 
 export function PasswordInput({
@@ -22,6 +23,7 @@ export function PasswordInput({
   autoComplete = 'current-password',
   required = false,
   className = '',
+  dir = 'ltr',
 }: PasswordInputProps) {
   const [show, setShow] = useState(false);
 
@@ -33,7 +35,7 @@ export function PasswordInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={`pl-12 h-12 ${className}`}
-        dir="ltr"
+        dir={dir}
         name={name}
         id={id}
         autoComplete={autoComplete}
